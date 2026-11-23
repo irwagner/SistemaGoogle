@@ -1,0 +1,36 @@
+@page
+@model RecursosModel
+@{ ViewData["Title"] = "Recursos"; }
+<h1>Recursos</h1>
+@if (Model.Notice != null) { <p class="ok" role="status">@Model.Notice</p> }
+@if (Model.Error != null) { <p class="alert" role="alert">@Model.Error</p> }
+<section class="panel">
+    <h2>Observações de cota</h2>
+    @if (Model.Observations.Count == 0) { <p>Nenhuma observação. Identidades remotas aguardam ensaio autorizado.</p> }
+    else {
+    <div class="table"><table><thead><tr><th>Produto e sujeito</th><th>Limite</th><th>Saldo</th><th>Validade</th><th>Origem</th></tr></thead><tbody>
+    @foreach (var limit in Model.Observations) {
+        <tr><td>@limit.Product · @limit.Subject</td><td>@limit.Bucket · @limit.Window</td>
+        <td>@(limit.Remaining?.ToString() ?? "Desconhecido") · @limit.Unit · @limit.Status</td>
+        <td>@(limit.Expires <= Model.Now ? "Vencida" : "Vigente")</td><td>@limit.Source</td></tr>
+    }
+    </tbody></table></div>
+    }
+</section>
+<div class="grid">
+<section class="panel"><h2>Registrar observação manual</h2>
+    <p>Use identificadores mascarados e vínculos do produto. A observação manual serve de evidência consultiva.</p>
+    <form method="post" asp-page-handler="Observar">
+        <label>Snapshot JSON<textarea name="snapshot" maxlength="24000" required>@Model.Example</textarea></label>
+        <button>Registrar observação</button>
+    </form>
+</section>
+<section class="panel"><h2>Carteira</h2>
+    <form method="post" asp-page-handler="Carteira">
+        <label>Identificador<input name="wallet" required></label>
+        <label>Unidade<input name="unit" placeholder="BRL_centavos ou creditos" required></label>
+        <label>Teto (em branco para desconhecido)<input type="number" min="0" name="ceiling"></label>
+        <button>Guardar teto</button>
+    </form>
+</section>
+</div>

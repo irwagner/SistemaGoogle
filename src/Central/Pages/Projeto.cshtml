@@ -1,0 +1,51 @@
+@page "/projetos/{id}"
+@model ProjetoModel
+@{ ViewData["Title"] = Model.Project.Name; }
+<a class="back" asp-page="/Index">← Projetos</a>
+<h1>@Model.Project.Name</h1>
+<div class="row"><span class="pill">@Model.Project.Kind</span><span class="pill">@Model.Project.Classification</span></div>
+<nav class="nav" aria-label="Seções do projeto">
+@foreach (var tab in new[] { ("trabalho", "Tarefas"), ("arquivos", "Arquivos"), ("estudio", "Estúdio"), ("pesquisa", "Pesquisa"), ("historico", "Histórico"), ("recursos", "Recursos e custos") })
+{
+    if ((tab.Item1 == "estudio" && Model.Project.Kind != "estudio") || (tab.Item1 == "pesquisa" && Model.Project.Kind != "pesquisa")) { continue; }
+    <a asp-page="/Projeto" asp-route-id="@Model.Project.Id" asp-route-sec="@tab.Item1" aria-current="@(Model.Section == tab.Item1 ? "page" : null)">@tab.Item2</a>
+}
+</nav>
+@if (Model.Error != null) { <p class="alert" role="alert">@Model.Error</p> }
+@if (Model.Notice != null) { <p class="ok" role="status">@Model.Notice</p> }
+@switch (Model.Section)
+{
+    case "arquivos": <partial name="_Arquivos" model="Model" /> break;
+    case "estudio": <partial name="_Estudio" model="Model" /> break;
+    case "pesquisa": <partial name="_Pesquisa" model="Model" /> break;
+    case "historico":
+        <section class="panel">
+        <h2>Checkpoints</h2>
+        <ul class="list">
+        @foreach (var checkpoint in Model.Checkpoints)
+        {
+            <li><strong>@checkpoint.Next</strong><br><small>@ProjetoModel.DisplayTime(checkpoint.Created) · versão @checkpoint.Version · @checkpoint.Task</small><pre>@checkpoint.Details</pre></li>
+        }
+        </ul></section>
+        <section class="panel"><h2>Eventos</h2><ul class="list">
+        @foreach (var entry in Model.Events.Reverse()) { <li>@entry.Kind · @entry.Detail <small>@ProjetoModel.DisplayTime(entry.Created)</small></li> }
+        </ul></section>
+        break;
+    case "recursos":
+        <section class="panel">
+        <h2>Efeitos e conciliação</h2>
+        @if (Model.Effects.Count == 0) { <p>Nenhum efeito remoto neste projeto. Os conectores remotos aguardam prova autorizada.</p> }
+        <ul class="list">
+        @foreach (var effect in Model.Effects)
+        {
+            <li>@effect.State · @effect.Connection · @(effect.Identity ?? "Identidade desconhecida") · @effect.Model
+                <br><small>Intenção @effect.Id · operação remota @(effect.RemoteId ?? "desconhecida")</small></li>
+        }
+        </ul></section>
+        <section class="panel"><h2>Livro de custos</h2>
+        @if (Model.Ledger.Count == 0) { <p>Nenhum lançamento. Informe taxa de trabalho e rateio na ficha do piloto.</p> }
+        <ul class="list">@foreach (var entry in Model.Ledger) { <li>@entry.Kind · @entry.Wallet · @(entry.Amount?.ToString() ?? "Desconhecido") @entry.Unit · @entry.Certainty</li> }</ul>
+        </section>
+        break;
+    default: <partial name="_Trabalho" model="Model" /> break;
+}

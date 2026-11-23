@@ -1,0 +1,27 @@
+@page
+@model IndexModel
+@{ ViewData["Title"] = "Projetos"; }
+<h1>Projetos</h1>
+<div class="grid">
+    <section class="panel">
+        <h2>Seus projetos</h2>
+        @if (Model.Projects.Count == 0) { <p class="muted">Crie um projeto para registrar a primeira entrada.</p> }
+        <ul class="list">
+        @foreach (var project in Model.Projects)
+        {
+            <li><a asp-page="/Projeto" asp-route-id="@project.Id">@project.Name</a> <small>@project.Kind · @project.Classification</small></li>
+        }
+        </ul>
+    </section>
+    <section class="panel">
+        <h2>Novo projeto</h2>
+        @if (Model.Error != null) { <p class="alert" role="alert">@Model.Error</p> }
+        <form method="post">
+            <input type="hidden" name="key" value="@Model.Key">
+            <label>Nome<input name="name" maxlength="100" required autofocus></label>
+            <label>Tipo<select name="kind"><option value="software">Software</option><option value="estudio">Estúdio</option><option value="pesquisa">Pesquisa</option></select></label>
+            <label>Classificação<select name="classification"><option value="interno">Interno</option><option value="publico">Público</option><option value="restrito">Restrito</option></select></label>
+            <button>Criar projeto</button>
+        </form>
+    </section>
+</div>

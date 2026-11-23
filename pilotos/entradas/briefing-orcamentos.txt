@@ -1,0 +1,4 @@
+Oficina Horizonte (dados fictícios).
+O operador precisa emitir um orçamento em reais usando uma página local. Deve informar cliente, item, quantidade inteira e valor unitário, calcular o total, salvar, fechar, reabrir e baixar um PDF com o mesmo valor.
+Aceite inicial: Maria Exemplo, Instalação de suporte, 3 unidades a R$ 47,90, total R$ 143,70. Campos inválidos não criam orçamento.
+Linha de base a cronometrar com cliente: digitar numa planilha, conferir a multiplicação, exportar em PDF e localizar o documento novamente.

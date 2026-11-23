@@ -1,0 +1,26 @@
+@model ProjetoModel
+<div class="grid">
+    <section class="panel"><h2>Arquivos do projeto</h2>
+    @if (Model.Assets.Count == 0) { <p>Nenhum arquivo validado.</p> }
+    <ul class="list">
+    @foreach (var asset in Model.Assets)
+    {
+        <li data-asset="@asset.Id">
+            <a asp-page="/Projeto" asp-page-handler="Arquivo" asp-route-id="@Model.Project.Id" asp-route-asset="@asset.Id">@asset.Name</a>
+            <small>@asset.Size bytes · @asset.Origin · @asset.Rights</small><br><code>@asset.Hash</code>
+        </li>
+    }
+    </ul></section>
+    <section class="panel"><h2>Importar e validar</h2>
+        <form method="post" enctype="multipart/form-data" asp-page-handler="Importar" asp-route-sec="arquivos">
+            <input type="hidden" name="key" value="@Model.Key">
+            <label>Arquivo<input type="file" name="file" required></label>
+            <label>Tarefa<select name="task"><option value="">Criar tarefa de validação</option>
+            @foreach (var task in Model.Tasks.Where(task => task.State is "pronta" or "execucao" or "revisao")) { <option value="@task.Id">@task.Title</option> }
+            </select></label>
+            <label>Origem<input name="origin" maxlength="160" placeholder="Ex. gravação autoral local" required></label>
+            <label>Permissão de uso<input name="rights" maxlength="250" placeholder="Descreva a autorização ou indique pendente" required></label>
+            <button>Importar arquivo</button>
+        </form>
+    </section>
+</div>

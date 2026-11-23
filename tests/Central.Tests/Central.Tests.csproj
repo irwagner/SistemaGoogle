@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Central/Central.csproj" />
+    <None Include="../../CENARIOS_DE_COTAS.json" Link="CENARIOS_DE_COTAS.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

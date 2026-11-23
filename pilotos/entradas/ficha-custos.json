@@ -1,0 +1,9 @@
+{
+  "moeda": "BRL",
+  "receitaLiquidaCentavos": null,
+  "taxaHoraCentavos": null,
+  "gastoIncrementalRemotoCentavos": 0,
+  "rateioAssinaturaCentavos": null,
+  "infraestruturaCentavos": null,
+  "linhaDeBaseMinutos": null
+}

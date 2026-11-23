@@ -1,0 +1,111 @@
+@model ProjetoModel
+@{
+    var bible = Model.Bible;
+    var shots = Model.Shots;
+    var takes = Model.Takes;
+    var assets = Model.Assets.ToDictionary(a => a.Id);
+}
+<div class="grid">
+<div>
+<section class="panel"><h2>Bíblia e roteiro</h2>
+    <form method="post" asp-page-handler="Biblia">
+        <label>Título do episódio<input name="title" value="@bible?.Title" maxlength="120" required></label>
+        <label>Roteiro<textarea name="script" maxlength="16000" required>@bible?.Script</textarea></label>
+        <label>Bíblia e direitos<textarea name="bible" maxlength="16000" required>@bible?.Text</textarea></label>
+        <button>Salvar versão</button>
+        @if (bible != null) { <small>Versão @bible.Version</small> }
+    </form>
+</section>
+@if (bible != null)
+{
+<section class="panel"><h2>Planos e takes</h2>
+@foreach (var shot in shots)
+{
+    <article data-shot="@shot.Id">
+    <h3>Plano @shot.Ordinal · @shot.Frames quadros</h3>
+    <p>@shot.Direction</p><small>@shot.Scene</small>
+    <p><a asp-page-handler="Flow" asp-route-shot="@shot.Id">Baixar ficha para o Flow</a></p>
+    @foreach (var take in takes.Where(t => t.Shot == shot.Id))
+    {
+        <details data-take="@take.Id" data-disposition="@take.Disposition"><summary>@assets[take.Asset].Name · @take.Disposition</summary>
+            <p>@take.Parameters</p><p>@take.Review</p><small>@assets[take.Asset].Rights</small>
+            @if (assets[take.Asset].Type == ".mp4")
+            { <video controls preload="none" src="@Url.Page("/Projeto", "Arquivo", new { id = Model.Project.Id, asset = take.Asset, inline = true })"></video> }
+            <form method="post" asp-page-handler="RevisarTake">
+                <input type="hidden" name="take" value="@take.Id">
+                <label>Revisão de continuidade e direitos<textarea name="notes" required></textarea></label>
+                <div class="row"><button name="select" value="true">Selecionar</button><button name="select" value="false">Reprovar</button></div>
+            </form>
+        </details>
+    }
+    </article>
+}
+</section>
+<section class="panel"><h2>Edições e masters</h2>
+<form method="post" asp-page-handler="Edicao"><button>Registrar timeline atual</button></form>
+@foreach (var edit in Model.Edits)
+{
+    <article data-edit="@edit.Id" data-state="@edit.State">
+        <h3>@edit.State · @edit.Id[..8]</h3>
+        <details><summary>Manifesto da timeline</summary><pre>@edit.Manifest</pre></details>
+        @if (edit.Master != null)
+        {
+            <video controls preload="metadata" src="@Url.Page("/Projeto", "Arquivo", new { id = Model.Project.Id, asset = edit.Master, inline = true })"></video>
+            <div class="row"><a asp-page-handler="Arquivo" asp-route-asset="@edit.Master">Baixar master</a><a asp-page-handler="Probe" asp-route-edit="@edit.Id">Baixar laudo ffprobe</a></div>
+            @if (edit.Review != null) { <p>@edit.Review</p> }
+        }
+        @if (edit.State is "pronta" or "interrompida" or "renderizando")
+        {
+            <form method="post" asp-page-handler="Render"><input type="hidden" name="edit" value="@edit.Id"><button>Renderizar esta edição</button></form>
+        }
+        @if (edit.State == "revisao")
+        {
+            <form method="post" asp-page-handler="RevisarEdicao"><input type="hidden" name="edit" value="@edit.Id">
+                <label>Revisão visual, sonora e de direitos<textarea name="notes" required></textarea></label>
+                <div class="row"><button name="accept" value="true">Aprovar master</button><button name="accept" value="false">Reprovar master</button></div>
+            </form>
+        }
+        @if (edit.State == "aprovada")
+        {
+            <form method="post" asp-page-handler="Exportar"><input type="hidden" name="edit" value="@edit.Id">
+                <label>Legenda<select name="caption" required>@foreach (var asset in assets.Values.Where(a => a.Type == ".srt")) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+                <label>Capa<select name="cover" required>@foreach (var asset in assets.Values.Where(a => a.Type is ".png" or ".jpg" or ".webp")) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+                <label>Título, público, créditos e uso autorizado<textarea name="metadata" required></textarea></label>
+                <label class="row"><input type="checkbox" class="check" name="authorized" value="true" required> Confirmo a permissão de uso dos ativos para esta entrega.</label>
+                <button>Exportar pacote editorial</button>
+            </form>
+        }
+    </article>
+}
+</section>
+}
+</div>
+<div>
+@if (bible != null)
+{
+<section class="panel"><h2>Adicionar plano</h2><form method="post" asp-page-handler="Plano">
+    <label>Cena<input name="scene" type="number" min="1" value="1" required></label>
+    <label>Descrição da cena<input name="sceneDescription" required></label>
+    <label>Direção e continuidade<textarea name="direction" required></textarea></label>
+    <label>Duração em quadros (24 fps)<input name="frames" type="number" min="24" max="2400" value="192" required></label>
+    <button>Criar plano</button>
+</form></section>
+<section class="panel"><h2>Vincular take</h2><p>Os arquivos da seção <a asp-route-sec="arquivos">Arquivos</a> ficam disponíveis para montagem.</p>
+<form method="post" asp-page-handler="Take">
+    <label>Plano<select name="shot" required>@foreach (var shot in shots) { <option value="@shot.Id">Plano @shot.Ordinal</option> }</select></label>
+    <label>Vídeo<select name="asset" required>@foreach (var asset in assets.Values.Where(a => a.Type is ".mp4" or ".mov" or ".webm")) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+    <label>Origem, executor, parâmetros e recibo sanitizado<textarea name="parameters" required></textarea></label>
+    <button>Vincular take</button>
+</form></section>
+<section class="panel"><h2>Faixas de áudio</h2><ul class="list">
+@foreach (var track in Model.Tracks) { <li>@track.Role · @assets[track.Asset].Name · @track.Voice</li> }
+</ul><form method="post" asp-page-handler="Faixa">
+    <label>Arquivo<select name="asset" required>@foreach (var asset in assets.Values.Where(a => a.Type is ".wav" or ".mp3")) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+    <label>Tipo<select name="role"><option value="trilha">Trilha</option><option value="voz">Voz</option><option value="efeitos">Efeitos</option></select></label>
+    <label>Voz, autoria e idioma<input name="voice" required></label>
+    <label>Ganho de 0 a 2<input name="gain" value="1" required></label>
+    <label>Quadro de entrada<input name="start" type="number" min="0" value="0" required></label>
+    <button>Adicionar faixa</button>
+</form></section>
+}
+</div></div>

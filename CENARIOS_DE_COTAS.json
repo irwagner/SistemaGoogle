@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "1.0",
+  "purpose": "Cenários ilustrativos de domínio para implementação. Não representam contas, modelos ou saldos reais.",
+  "timeBasis": "Use relógio controlado nos testes; não depender do horário da máquina.",
+  "scenarios": [
+    {
+      "id": "independent_groups",
+      "models": {"model-g": ["gemini-group"], "model-c": ["partner-group"]},
+      "limits": [
+        {"bucket": "gemini-group", "window": "short", "status": "exhausted"},
+        {"bucket": "gemini-group", "window": "weekly", "status": "available"},
+        {"bucket": "partner-group", "window": "short", "status": "available"},
+        {"bucket": "partner-group", "window": "weekly", "status": "available"}
+      ],
+      "expected": {"model-g": "wait_or_other_resource", "model-c": "eligible_if_other_constraints_pass"}
+    },
+    {
+      "id": "shared_partner_group",
+      "models": {"model-sonnet-example": ["partner-group"], "model-opus-example": ["partner-group"], "model-gpt-example": ["partner-group"]},
+      "limits": [{"bucket": "partner-group", "window": "short", "status": "exhausted"}],
+      "expected": "All three models remain blocked; changing the model does not create fresh quota."
+    },
+    {
+      "id": "weekly_intersection",
+      "models": {"model-g": ["gemini-group"]},
+      "limits": [
+        {"bucket": "gemini-group", "window": "short", "status": "available"},
+        {"bucket": "gemini-group", "window": "weekly", "status": "exhausted"}
+      ],
+      "expected": "blocked_even_after_short_window_reset"
+    },
+    {
+      "id": "global_constraint",
+      "models": {"model-c": ["partner-group", "account-global"]},
+      "limits": [
+        {"bucket": "partner-group", "window": "short", "status": "available"},
+        {"bucket": "account-global", "window": "upstream-window", "status": "exhausted"}
+      ],
+      "expected": "blocked_by_global_constraint"
+    },
+    {
+      "id": "shared_project_keys",
+      "connections": [
+        {"id": "key-connection-1", "quotaSubject": "cloud-project-x"},
+        {"id": "key-connection-2", "quotaSubject": "cloud-project-x"}
+      ],
+      "expected": "One shared subject; do not count or reserve the same capacity twice."
+    },
+    {
+      "id": "unknown_quota",
+      "observation": {"remaining": null, "unit": "unknown", "status": "unknown", "resetAt": null},
+      "expected": "Show unknown; no fabricated 0, 100 percent, tokens, unlimited balance, or reset."
+    },
+    {
+      "id": "fixed_identity_unavailable",
+      "policy": "manual",
+      "selectedConnection": "account-a-antigravity",
+      "connectionStatus": "reauth_required",
+      "connectorDefaultConnection": "account-b-antigravity",
+      "expected": "Do not use account B silently; report wait or authentication requirement."
+    },
+    {
+      "id": "ambiguous_video_submission",
+      "operation": "generate_clip",
+      "failure": "timeout_after_submit",
+      "remoteJobId": "job-example-123",
+      "expected": "Reconcile job-example-123 before any new submission; no automatic duplicate generation."
+    },
+    {
+      "id": "paid_fallback_disabled",
+      "subscriptionCandidates": "unavailable",
+      "paidApiCandidate": "available",
+      "allowAdditionalSpend": false,
+      "expected": "Persist a wait; never use the paid API candidate."
+    },
+    {
+      "id": "exclusive_lease_race",
+      "workers": ["worker-1", "worker-2"],
+      "connectionConcurrencyLimit": 1,
+      "expected": "Exactly one worker receives a lease; expired worker cannot commit after ownership changes."
+    },
+    {
+      "id": "separate_products",
+      "limits": [
+        {"product": "antigravity", "bucket": "gemini-group", "status": "exhausted"},
+        {"product": "flow", "bucket": "video-budget-example", "status": "available"}
+      ],
+      "expected": "Evaluate Flow independently; do not reuse or merge the Antigravity bucket without upstream evidence."
+    },
+    {
+      "id": "model_not_entitled",
+      "connectionModels": ["model-a", "model-b"],
+      "requestedModel": "model-c",
+      "expected": "Reject this connection for the requested model, even if another account can access it."
+    }
+  ]
+}

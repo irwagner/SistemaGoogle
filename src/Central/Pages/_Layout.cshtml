@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>@ViewData["Title"] · Central de Produção</title>
+    <link rel="stylesheet" href="/central.css">
+</head>
+<body>
+<header class="top"><a asp-page="/Index" class="brand"><span>CP</span> Central de Produção</a><nav class="row" aria-label="Central"><a asp-page="/Recursos">Recursos</a><a asp-page="/Diagnostico">Diagnóstico</a></nav></header>
+<main>@RenderBody()</main>
+</body>
+</html>

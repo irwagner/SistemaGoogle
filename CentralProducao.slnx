@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/Central/Central.csproj" />
+  <Project Path="pilotos/Orcamentos/Orcamentos.csproj" />
+  <Project Path="tests/Central.Tests/Central.Tests.csproj" />
+</Solution>

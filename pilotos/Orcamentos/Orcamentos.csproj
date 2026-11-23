@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <RuntimeFrameworkVersion>10.0.15</RuntimeFrameworkVersion>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="[10.0.15]" />
+  </ItemGroup>
+</Project>

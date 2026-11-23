@@ -1,0 +1,13 @@
+@page
+@model DiagnosticoModel
+@{ ViewData["Title"] = "Diagnóstico"; }
+<h1>Diagnóstico</h1>
+<section class="panel"><h2>Instalação local</h2><pre>@Model.Info</pre>
+    @if (Model.Hold != null) { <p class="alert">@Model.Hold</p> }
+</section>
+<section class="panel"><h2>Capacidades</h2>
+    <ul class="list"><li>Antigravity · pacote assistido, ensaio com conta pendente</li>
+        <li>Gemini Notebook REST v1 · transporte experimental, OAuth e ensaio pendentes</li>
+        <li>Flow · ficha para operação assistida, geração com conta pendente</li>
+        <li>Drive e publicação · pacote local disponível quando aprovado no estúdio</li></ul>
+</section>

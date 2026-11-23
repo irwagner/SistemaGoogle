@@ -1,0 +1,56 @@
+@model ProjetoModel
+<div class="grid">
+<section class="panel">
+    <h2>Tarefas</h2>
+    @if (Model.Tasks.Count == 0) { <p>Crie a primeira tarefa ou <a asp-page="/Projeto" asp-route-id="@Model.Project.Id" asp-route-sec="arquivos">importe um arquivo</a>.</p> }
+    <ul class="list">
+    @foreach (var task in Model.Tasks)
+    {
+        var checkpoint = Model.Checkpoints.FirstOrDefault(c => c.Task == task.Id);
+        <li data-task="@task.Id" data-version="@task.Version" data-state="@task.State">
+            <strong>@task.Title</strong> <span class="pill">@task.State</span>
+            @if (task.Reason != null) { <p>@task.Reason</p> }
+            @if (checkpoint != null) { <p class="muted">@checkpoint.Next</p> }
+            @if (task.State is "pronta" or "execucao" or "pausada" or "revisao")
+            {
+                <details><summary>Registrar decisão</summary>
+                <form method="post" asp-page-handler="Avancar">
+                    <input type="hidden" name="task" value="@task.Id"><input type="hidden" name="version" value="@task.Version">
+                    <label>Próxima ação e evidências<textarea name="note" required maxlength="6000"></textarea></label>
+                    <div class="row">
+                    @if (task.State == "pausada") { <button name="action" value="retomar">Retomar</button><button name="action" value="cancelar">Cancelar tarefa</button> }
+                    else if(task.State == "revisao") { <button name="action" value="aceitar">Aceitar</button><button name="action" value="reabrir">Reabrir</button><button name="action" value="pausar">Pausar</button> }
+                    else { <button name="action" value="revisar">Enviar para revisão</button><button name="action" value="pausar">Pausar</button> }
+                    </div>
+                </form></details>
+            }
+        </li>
+    }
+    </ul>
+</section>
+<div>
+<section class="panel"><h2>Nova tarefa</h2>
+    <form method="post" asp-page-handler="Tarefa">
+        <label>Título<input name="title" required maxlength="150"></label>
+        <label>Política<select name="policy"><option value="local">Local</option><option value="assistida">Assistida</option><option value="fixa">Identidade fixa</option></select></label>
+        @if (Model.Tasks.Count != 0)
+        {
+            <label>Dependências<select name="predecessors" multiple>
+            @foreach (var task in Model.Tasks) { <option value="@task.Id">@task.Title</option> }
+            </select></label>
+        }
+        <button>Criar tarefa</button>
+    </form>
+</section>
+@if (Model.Project.Kind == "software" && Model.Tasks.Count > 0)
+{
+    <section class="panel"><h2>Pacote para o Antigravity</h2><p class="muted">O operador executa no cliente oficial, revisa e importa o resultado em Arquivos.</p>
+        <form method="post" asp-page-handler="PacoteTarefa">
+            <label>Tarefa<select name="task">@foreach (var task in Model.Tasks) { <option value="@task.Id">@task.Title</option> }</select></label>
+            <label>SHA da base<input name="baseCommit" required minlength="40" maxlength="64"></label>
+            <label>Objetivo<textarea name="objective" required></textarea></label><label>Aceite<textarea name="acceptance" required></textarea></label>
+            <button>Baixar pacote de tarefa</button>
+        </form>
+    </section>
+}
+</div></div>

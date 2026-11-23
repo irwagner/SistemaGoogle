@@ -1,0 +1,39 @@
+@model ProjetoModel
+<div class="grid"><section class="panel">
+    <h2>Perguntas e evidências</h2>
+    <a asp-page-handler="Relatorio">Baixar relatório</a>
+    @foreach (var question in Model.Questions)
+    {
+        <article data-question="@question.Id"><h3>@question.Text</h3><p>@question.Criteria</p>
+        @foreach (var source in Model.Sources.Where(s => s.Question == question.Id))
+        {
+            <details data-source="@source.Id"><summary>@source.Name · @source.Author</summary><p>@source.Excerpt</p><small>@source.Locator · @source.Rights</small>
+            @foreach (var claim in Model.Claims.Where(c => c.Source == source.Id))
+            {
+                <article data-claim="@claim.Id"><p>@(claim.Inference ? "Inferência" : "Afirmação") · @claim.Text</p><p>@claim.Review</p>
+                <form method="post" asp-page-handler="RevisarPesquisa"><input type="hidden" name="claim" value="@claim.Id"><label>Nota de revisão<input name="notes" required></label>
+                <div class="row"><button name="approved" value="true">Aprovar</button><button name="approved" value="false">Marcar pendência</button></div></form></article>
+            }
+            </details>
+        }
+        </article>
+    }
+</section><div>
+<section class="panel"><h2>Nova pergunta</h2><form method="post" asp-page-handler="Pergunta">
+    <label>Pergunta<input name="question" required></label><label>Escopo, prazo e critério<textarea name="criteria" required></textarea></label><button>Registrar pergunta</button>
+</form></section>
+@if (Model.Questions.Count > 0) {
+<section class="panel"><h2>Nova fonte</h2><form method="post" asp-page-handler="Fonte">
+    <label>Pergunta<select name="question">@foreach (var question in Model.Questions) { <option value="@question.Id">@question.Text</option> }</select></label>
+    <label>Título<input name="label" required></label><label>URL HTTPS canônica ou SHA-256<input name="locator" required></label><label>Autor<input name="author" required></label>
+    <label>Permissão de uso<input name="rights" required></label><label>Trecho ou página<textarea name="excerpt" required></textarea></label><button>Registrar fonte</button>
+</form></section>
+}
+@if (Model.Sources.Count > 0) {
+<section class="panel"><h2>Nova afirmação</h2><form method="post" asp-page-handler="Afirmacao">
+    <label>Fonte<select name="source">@foreach (var source in Model.Sources) { <option value="@source.Id">@source.Name</option> }</select></label>
+    <label>Afirmação<textarea name="claim" required></textarea></label>
+    <label>Tipo<select name="inference"><option value="false">Fato da fonte</option><option value="true">Inferência</option></select></label><button>Registrar afirmação</button>
+</form></section>
+}
+</div></div>
