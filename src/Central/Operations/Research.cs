@@ -81,12 +81,12 @@ public sealed class Research(Store store)
         });
     }
 
-    public string Report(string project)
+    public string Report(string project, string? onlyQuestion = null)
     {
         var sources = Sources(project).ToDictionary(s => s.Id);
         var claims = Claims(project);
         var report = new System.Text.StringBuilder($"# {store.GetProject(project).Name}\n");
-        foreach (var question in Questions(project))
+        foreach (var question in Questions(project).Where(question => onlyQuestion == null || question.Id == onlyQuestion))
         {
             report.AppendLine($"\n## {question.Text}\n\n{question.Criteria}\n");
             foreach (var claim in claims.Where(claim => claim.Question == question.Id))

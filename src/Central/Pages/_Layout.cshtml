@@ -7,7 +7,11 @@
     <link rel="stylesheet" href="/central.css">
 </head>
 <body>
-<header class="top"><a asp-page="/Index" class="brand"><span>CP</span> Central de Produção</a><nav class="row" aria-label="Central"><a asp-page="/Recursos">Recursos</a><a asp-page="/Diagnostico">Diagnóstico</a></nav></header>
+<header class="top"><a asp-page="/Index" class="brand"><span>CP</span> Central de Produção</a><nav class="row" aria-label="Central">
+  <a asp-page="/Area" asp-route-area="programacao">Programação</a><a asp-page="/Area" asp-route-area="video">Vídeo</a>
+  <a asp-page="/Area" asp-route-area="pesquisa">Pesquisa</a><a asp-page="/Area" asp-route-area="audio">Áudio</a>
+  <a asp-page="/Area" asp-route-area="distribuicao">Distribuição</a><a asp-page="/Recursos">Recursos</a><a asp-page="/Diagnostico">Diagnóstico</a>
+</nav></header>
 <main>@RenderBody()</main>
 </body>
 </html>

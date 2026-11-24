@@ -1,0 +1,50 @@
+@page "/area/{area}"
+@model AreaModel
+@{ ViewData["Title"] = Workbench.Areas[Model.Area]; }
+<a class="back" asp-page="/Index">← Início</a>
+<h1>@Workbench.Areas[Model.Area]</h1>
+<div class="area-modes">
+@foreach (var option in Model.Choices)
+{
+    <a class="mode-button" asp-route-area="@Model.Area" asp-route-mode="@option.Key" asp-route-project="@Model.SelectedProject"
+       aria-current="@(Model.InitialMode == option.Key ? "page" : null)">@option.Value</a>
+}
+</div>
+<div class="grid">
+<section class="panel">
+    <h2>@(Model.InitialMode != null && Model.Choices.TryGetValue(Model.InitialMode, out var active) ? active : "Novo trabalho")</h2>
+    @if (Model.Error != null) { <p class="alert" role="alert">@Model.Error</p> }
+    <form method="post">
+        <input type="hidden" name="key" value="@Model.Key">
+        <label>Modalidade<select name="mode">@foreach (var option in Model.Choices) { <option value="@option.Key" selected="@(Model.InitialMode == option.Key)">@option.Value</option> }</select></label>
+        <label>Projeto<select name="project">
+            <option value="">Novo projeto</option>
+            @foreach (var project in Model.Projects) { <option value="@project.Id" selected="@(Model.SelectedProject == project.Id)">@project.Name</option> }
+        </select></label>
+        <label>Nome do novo projeto<input name="projectName" maxlength="100"></label>
+        <label>Título do trabalho<input name="title" maxlength="120" required></label>
+        <label>@(Model.Area == "video" ? "Qual é a ideia do vídeo?" : Model.Area == "pesquisa" ? "Qual pergunta você quer investigar?" : "O que você quer produzir?")
+            <textarea name="request" maxlength="14000" required rows="6"></textarea>
+        </label>
+        <details><summary>Prioridade e dependência</summary>
+            <label>Prioridade de 0 a 9<input type="number" name="priority" min="0" max="9" value="5"></label>
+            @if (Model.Dependencies().Count != 0)
+            {
+                <label>Começar após o aceite de<select name="follows"><option value="">Sem dependência</option>
+                    @foreach (var item in Model.Dependencies()) { <option value="@item.Id">@item.Title</option> }
+                </select></label>
+            }
+        </details>
+        <button>Abrir trabalho</button>
+    </form>
+</section>
+<section class="panel"><h2>Trabalhos recentes</h2>
+    @if (Model.Items.Count == 0) { <p class="muted">Os trabalhos desta área aparecem aqui.</p> }
+    <ul class="list">
+        @foreach (var item in Model.Items.Take(20)) {
+            <li><a asp-page="/Trabalho" asp-route-id="@item.Id">@item.Title</a>
+                <small>@TrabalhoModel.StateLabel(item.State) · @Model.Projects.First(p => p.Id == item.Project).Name</small></li>
+        }
+    </ul>
+</section>
+</div>

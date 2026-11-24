@@ -21,13 +21,25 @@
 <section class="panel"><h2>Planos e takes</h2>
 @foreach (var shot in shots)
 {
-    <article data-shot="@shot.Id">
+    <article class="shot-card" data-shot="@shot.Id">
     <h3>Plano @shot.Ordinal · @shot.Frames quadros</h3>
     <p>@shot.Direction</p><small>@shot.Scene</small>
     <p><a asp-page-handler="Flow" asp-route-shot="@shot.Id">Baixar ficha para o Flow</a></p>
+    <details><summary>Refazer este plano no Flow</summary>
+        <form method="post" asp-page-handler="Flow">
+            <input type="hidden" name="shot" value="@shot.Id">
+            <label>Saídas<input name="outputs" type="number" min="1" max="4" value="1" required></label>
+            <label>Créditos por saída informados pelo Flow<input name="unitCost" type="number" min="0" placeholder="Desconhecido"></label>
+            <label>Referência<select name="reference"><option value="">Sem referência</option>@foreach (var asset in assets.Values.Where(a => a.Type is ".png" or ".jpg" or ".webp" or ".mp4")) {
+                <option value="@asset.Id">@asset.Name</option>
+            }</select></label>
+            <button class="secondary">Baixar ficha desta cena</button>
+        </form>
+    </details>
+    <div class="take-grid">
     @foreach (var take in takes.Where(t => t.Shot == shot.Id))
     {
-        <details data-take="@take.Id" data-disposition="@take.Disposition"><summary>@assets[take.Asset].Name · @take.Disposition</summary>
+        <details open="@(takes.Count(t => t.Shot == shot.Id) <= 3)" data-take="@take.Id" data-disposition="@take.Disposition"><summary>@assets[take.Asset].Name · @take.Disposition</summary>
             <p>@take.Parameters</p><p>@take.Review</p><small>@assets[take.Asset].Rights</small>
             @if (assets[take.Asset].Type == ".mp4")
             { <video controls preload="none" src="@Url.Page("/Projeto", "Arquivo", new { id = Model.Project.Id, asset = take.Asset, inline = true })"></video> }
@@ -36,8 +48,17 @@
                 <label>Revisão de continuidade e direitos<textarea name="notes" required></textarea></label>
                 <div class="row"><button name="select" value="true">Selecionar</button><button name="select" value="false">Reprovar</button></div>
             </form>
+            @if (take.Disposition != "selecionado" && takes.Any(t => t.Shot == take.Shot && t.Disposition == "selecionado"))
+            {
+                <form method="post" asp-page-handler="TrocarTake">
+                    <input type="hidden" name="take" value="@take.Id">
+                    <label>Motivo da substituição<input name="reason" required></label>
+                    <button class="secondary">Substituir só neste plano</button>
+                </form>
+            }
         </details>
     }
+    </div>
     </article>
 }
 </section>
@@ -98,7 +119,8 @@
     <button>Vincular take</button>
 </form></section>
 <section class="panel"><h2>Faixas de áudio</h2><ul class="list">
-@foreach (var track in Model.Tracks) { <li>@track.Role · @assets[track.Asset].Name · @track.Voice</li> }
+@foreach (var track in Model.Tracks) { <li>@track.Role · @assets[track.Asset].Name · @track.Voice
+    <audio controls preload="none" src="@Url.Page("/Projeto", "Arquivo", new { id = Model.Project.Id, asset = track.Asset, inline = true })"></audio></li> }
 </ul><form method="post" asp-page-handler="Faixa">
     <label>Arquivo<select name="asset" required>@foreach (var asset in assets.Values.Where(a => a.Type is ".wav" or ".mp3")) { <option value="@asset.Id">@asset.Name</option> }</select></label>
     <label>Tipo<select name="role"><option value="trilha">Trilha</option><option value="voz">Voz</option><option value="efeitos">Efeitos</option></select></label>

@@ -217,6 +217,92 @@ await Run("notebook_transporte_processing_failed", async _ =>
     Check(result.State == "FAILED" && result.Name == source && handler.Count == 2);
 });
 
+await Run("reserva_quantidade_saida_creditos_e_tokens", env =>
+{
+    var demand = new Dictionary<string,long> { ["creditos"] = 20, ["tokens"] = 700 };
+    var group = env.Limit("video", "mensal", "available", 15) with { Unit = "creditos" };
+    var tokens = env.Limit("modelo", "minuto", "available", 1000) with { Unit = "tokens" };
+    var percent = env.Limit("sinal", "dia", "available", 85) with { Unit = "percentual" };
+    env.Broker.Record(env.Connection("video"), "model", "v1", false, [group,tokens,percent]);
+    var request = env.Intent("video") with { Demand = demand };
+    Check(env.Broker.Reserve(request, "worker").Status == "reserva_de_cota");
+    env.Broker.Record(env.Connection("video"), "model", "v1", false, [group with { Remaining = 20 },tokens,percent]);
+    var lease = env.Broker.Reserve(request, "worker").Ticket!;
+    Throws(() => env.Broker.BeginSend(request with { Demand = new Dictionary<string,long> { ["creditos"] = 10, ["tokens"] = 700 } }, lease));
+    env.Broker.BeginSend(request, lease);
+    env.Broker.Receive(lease, "ambiguous", null, null, request.Identity);
+    Check(env.Broker.Reserve(request, "worker").Status == "ambiguous");
+    return Task.CompletedTask;
+});
+await Run("dois_workers_saldo_compartilhado_em_unidades", async env =>
+{
+    var limit = env.Limit("compartilhado", "mensal", "available", 15, "familia") with { Unit = "creditos" };
+    env.Broker.Record(env.Connection("a"), "model", "v1", false, [limit]);
+    env.Broker.Record(env.Connection("b"), "model", "v1", false, [limit]);
+    var demand = new Dictionary<string,long> { ["creditos"] = 10 };
+    var a = env.Intent("a") with { Demand = demand };
+    var b = env.Intent("b") with { Demand = demand };
+    using var start = new Barrier(2);
+    var outcomes = await Task.WhenAll(new[] { a, b }.Select((item,i) => Task.Run(() =>
+    {
+        start.SignalAndWait();
+        return env.Broker.Reserve(item, "worker-" + i);
+    })));
+    Check(outcomes.Count(item => item.Ticket != null) == 1 && outcomes.Count(item => item.Status == "reserva_de_cota") == 1);
+});
+await Run("fila_prioridade_dependencia_rascunho_retomada", env =>
+{
+    var desk = new Workbench(env.Store);
+    var first = desk.Create(env.Project, "programacao", "criar", "Trabalho A", "Pedido A", 2, null);
+    var blocked = desk.Create(env.Project, "programacao", "criar", "Trabalho B", "Pedido B", 9, first);
+    desk.SaveDraft(first, desk.Get(first).Revision, "pedido", "Rascunho persistente");
+    Check(new Workbench(new Store(env.Store.Root)).Draft(desk.Get(first), "pedido") == "Rascunho persistente");
+    desk.PlanWithModel(blocked, desk.Get(blocked).Revision, "modelo");
+    desk.PlanWithModel(first, desk.Get(first).Revision, "modelo");
+    var run = desk.Claim("1")!;
+    Check(run.Work.Id == first);
+    desk.Recover();
+    Check(desk.Get(first).State == "pausado" && !desk.Active(run));
+    desk.Finish(run, "revisao", "Resposta atrasada");
+    Check(desk.Get(first).State == "pausado");
+    desk.SetState(first, desk.Get(first).Revision, "retomar");
+    var recovered = desk.Claim("2")!;
+    desk.Finish(recovered, "revisao", "Pronto");
+    desk.SetState(first, desk.Get(first).Revision, "aceitar");
+    Check(desk.Claim("1")?.Work.Id == blocked && desk.Metrics().Rework == 1);
+    return Task.CompletedTask;
+});
+await Run("cofre_windows_e_snapshot_cifrado", async env =>
+{
+    const string secret = "canario de credencial 8080";
+    var backup = Path.Combine(testRoot, Store.Id() + ".central");
+    var store = env.Store;
+    var payload = await store.Import(env.Project, null, "preservar.txt", new MemoryStream(Encoding.UTF8.GetBytes(secret)),
+        "Fixture", "Teste local", "preservar");
+    var vault = new WindowsVault(store);
+    vault.Put("fixture", secret);
+    Check(vault.Get<string>("fixture") == secret);
+    vault.Remove("fixture");
+    Check(vault.Get<string>("fixture") == null);
+    EncryptedBackup.Create(store, backup, "senha longa de teste");
+    Check(!Encoding.UTF8.GetString(File.ReadAllBytes(backup)).Contains(secret, StringComparison.Ordinal));
+    var restored = Path.Combine(testRoot, Store.Id());
+    Throws(() => EncryptedBackup.Restore(backup, restored, "senha diferente longa"));
+    EncryptedBackup.Restore(backup, restored, "senha longa de teste");
+    var copy = new Store(restored);
+    Check(Store.HashFile(copy.Verify(copy.GetAsset(env.Project, payload.Id))) == payload.Hash);
+});
+await Run("falha_de_escrita_e_offset_upload", _ =>
+{
+    using var input = new MemoryStream(new byte[8192]);
+    using var full = new FullDisk();
+    try { EncryptedBackup.Encrypt(input, full, "senha longa de teste"); throw new InvalidOperationException("Disco cheio não sinalizado."); }
+    catch (IOException) { Check(full.Length < 128); }
+    Check(YoutubeDesk.NextOffset("bytes=0-255", 8192) == 256 && YoutubeDesk.NextOffset(null, 8192) == 0);
+    Throws(() => YoutubeDesk.NextOffset("bytes=0-8200", 8192));
+    return Task.CompletedTask;
+});
+
 Console.WriteLine($"Resultado | {passed}/{total} casos | {cases.Count} fixtures fornecidas | teste local de domínio");
 if (passed == total) Directory.Delete(testRoot, recursive: true);
 return passed == total ? 0 : 1;
@@ -249,6 +335,14 @@ sealed class ManualClock : TimeProvider
     private DateTimeOffset now = new(2026, 11, 23, 15, 0, 0, TimeSpan.Zero);
     public override DateTimeOffset GetUtcNow() => now;
     public void Advance(int seconds) => now = now.AddSeconds(seconds);
+}
+sealed class FullDisk : MemoryStream
+{
+    public override void Write(ReadOnlySpan<byte> bytes)
+    {
+        if (Length + bytes.Length > 128) throw new IOException("Disco cheio (fixture).");
+        base.Write(bytes);
+    }
 }
 sealed class ImmediateClock : TimeProvider
 {

@@ -48,6 +48,14 @@ if (args.FirstOrDefault() == "restore")
     Backup.Restore(args[1], root);
     return;
 }
+if (args.FirstOrDefault() is "backup-cifrado" or "restaurar-cifrado")
+{
+    if (args.Length != 2) throw new DomainError("Informe o caminho do arquivo de backup.");
+    var password = ReadBackupPassword();
+    if (args[0] == "backup-cifrado") EncryptedBackup.Create(new Store(root), args[1], password);
+    else EncryptedBackup.Restore(args[1], root, password);
+    return;
+}
 if (args.FirstOrDefault() == "diagnostico")
 {
     var store = new Store(root);
@@ -70,6 +78,7 @@ builder.WebHost.ConfigureKestrel(config =>
     var port = int.TryParse(Environment.GetEnvironmentVariable("CENTRAL_PORT"), out var configured) ? configured : 0;
     config.Listen(IPAddress.Loopback, port);
 });
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = Store.FileLimit + 1024 * 1024);
 builder.Services.AddRazorPages();
 builder.Services.AddAntiforgery(options => options.Cookie.SameSite = SameSiteMode.Strict);
@@ -78,7 +87,20 @@ builder.Services.AddSingleton<Coordinator>();
 builder.Services.AddSingleton<Studio>();
 builder.Services.AddSingleton<Research>();
 builder.Services.AddSingleton<Software>();
+builder.Services.AddSingleton<Workbench>();
+builder.Services.AddSingleton<LocalModel>();
+builder.Services.AddSingleton<VideoStories>();
+builder.Services.AddSingleton<AudioDesk>();
+builder.Services.AddSingleton<Distribution>();
+builder.Services.AddSingleton<WindowsVault>();
+builder.Services.AddSingleton<GoogleAuthorization>();
+builder.Services.AddSingleton<NotebookJobs>();
+builder.Services.AddSingleton<YoutubeDesk>();
+builder.Services.AddHostedService<NotebookWorker>();
+builder.Services.AddHostedService<ProgrammingWorker>();
 var app = builder.Build();
+app.Services.GetRequiredService<Workbench>().Recover();
+app.Services.GetRequiredService<NotebookJobs>().Recover();
 string address = "";
 app.Use(async (context, next) =>
 {
@@ -88,11 +110,12 @@ app.Use(async (context, next) =>
     { context.Response.StatusCode = 400; return; }
     context.Response.Headers.ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; object-src 'none'";
     context.Response.Headers.XContentTypeOptions = "nosniff";
-    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    context.Response.Headers["Referrer-Policy"] = request.Path == "/google/retorno" ? "no-referrer" : "same-origin";
     context.Response.Headers.CacheControl = "no-store";
     if (request.Headers.TryGetValue("Origin", out var origin) && origin.ToString() != $"http://{request.Host}")
     { context.Response.StatusCode = 403; return; }
-    if (request.Path == "/entrar" || request.Path == "/entrar.js" || request.Path == "/central.css")
+    if (request.Path == "/entrar" || request.Path == "/entrar.js" || request.Path == "/central.css" ||
+        HttpMethods.IsGet(request.Method) && request.Path == "/google/retorno")
     { await next(); return; }
     var authenticated = false;
     lock (authentication)
@@ -133,6 +156,17 @@ app.MapPost("/entrar", (HttpContext context) =>
 });
 app.UseStaticFiles();
 app.MapRazorPages();
+app.MapGet("/google/retorno", async (string? state, string? code, GoogleAuthorization google, CancellationToken token) =>
+{
+    var message = "Autorização registrada no cofre deste Windows.";
+    try { await google.Finish(state, code, token); }
+    catch (Exception error) when (error is DomainError or HttpRequestException or System.Text.Json.JsonException or IOException or OperationCanceledException)
+    { message = error is DomainError ? error.Message : "A autorização não pôde ser confirmada. Inicie novamente em Contas e recursos."; }
+    return Results.Content("<!doctype html><html lang=\"pt-BR\"><meta charset=\"utf-8\"><title>Autorização Google</title>" +
+        "<link rel=\"stylesheet\" href=\"/central.css\"><main><h1>Autorização Google</h1><p>" +
+        System.Net.WebUtility.HtmlEncode(message) + "</p><a href=\"/Google\">Voltar às autorizações</a></main></html>",
+        "text/html; charset=utf-8");
+});
 app.MapGet("/api/v1/projetos/{id}/eventos", (string id, long? cursor, Store store) =>
 {
     if (!store.Projects().Any(project => project.Id == id)) return Results.NotFound();
@@ -154,3 +188,17 @@ await app.RunAsync();
 
 static bool Equal(string left, string right) => CryptographicOperations.FixedTimeEquals(
     System.Text.Encoding.UTF8.GetBytes(left), System.Text.Encoding.UTF8.GetBytes(right));
+
+static string ReadBackupPassword()
+{
+    Console.Error.Write("Senha do backup: ");
+    if (Console.IsInputRedirected) return Console.ReadLine() ?? "";
+    var secret = new System.Text.StringBuilder();
+    while (true)
+    {
+        var next = Console.ReadKey(intercept: true);
+        if (next.Key == ConsoleKey.Enter) { Console.Error.WriteLine(); return secret.ToString(); }
+        if (next.Key == ConsoleKey.Backspace && secret.Length > 0) secret.Length--;
+        else if (!char.IsControl(next.KeyChar) && secret.Length < 512) secret.Append(next.KeyChar);
+    }
+}

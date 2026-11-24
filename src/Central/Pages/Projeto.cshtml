@@ -1,7 +1,9 @@
 @page "/projetos/{id}"
 @model ProjetoModel
 @{ ViewData["Title"] = Model.Project.Name; }
-<a class="back" asp-page="/Index">← Projetos</a>
+@if (Model.Scope is { } owner) {
+    <a class="back" asp-page="/Trabalho" asp-route-id="@owner.Work">← Trabalho de vídeo</a>
+} else { <a class="back" asp-page="/Index">← Projetos</a> }
 <h1>@Model.Project.Name</h1>
 <div class="row"><span class="pill">@Model.Project.Kind</span><span class="pill">@Model.Project.Classification</span></div>
 <nav class="nav" aria-label="Seções do projeto">
@@ -13,6 +15,16 @@
 </nav>
 @if (Model.Error != null) { <p class="alert" role="alert">@Model.Error</p> }
 @if (Model.Notice != null) { <p class="ok" role="status">@Model.Notice</p> }
+@if (Model.Section == "trabalho" && Model.Scope == null) {
+    <section class="panel"><h2>Trabalhos deste projeto</h2>
+        <div class="row">@foreach (var area in Workbench.Areas) {
+            <a asp-page="/Area" asp-route-area="@area.Key" asp-route-project="@Model.Project.Id">@area.Value</a>
+        }</div>
+        <ul class="list">@foreach (var item in Model.Works) {
+            <li><a asp-page="/Trabalho" asp-route-id="@item.Id">@item.Title</a> <small>@TrabalhoModel.StateLabel(item.State)</small></li>
+        }</ul>
+    </section>
+}
 @switch (Model.Section)
 {
     case "arquivos": <partial name="_Arquivos" model="Model" /> break;

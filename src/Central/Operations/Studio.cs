@@ -92,10 +92,29 @@ public sealed class Studio(Store store)
                 throw new DomainError("Plano não encontrado.");
             if (Store.AssetIn(db, project, asset).Type is not (".mp4" or ".mov" or ".webm"))
                 throw new DomainError("Escolha um arquivo de vídeo do projeto.");
+            if (db.Scalar<long>("""
+                SELECT COUNT(*) FROM takes t JOIN artifacts a ON a.id=t.artifact
+                WHERE t.shot=$s AND a.hash=(SELECT hash FROM artifacts WHERE id=$a)
+                """, shot, asset) != 0) return;
             var version = db.Scalar<long>("SELECT MAX(version) FROM bibles WHERE episode=$e", episode);
             var id = Store.Id();
             db.Exec("INSERT INTO takes VALUES($id,$p,$e,$s,$a,$v,$q,'pendente',NULL,$n)", id, project, episode, shot, asset, version, parameters, store.Now);
             store.Event(db, project, "estudio.take_importado", id);
+        });
+    }
+
+    public void ReplaceTake(string project, string take, string reason)
+    {
+        reason = Store.Text(reason, 2000, "a razão da troca desta cena");
+        store.Write(db =>
+        {
+            var shot = db.Scalar<string>("SELECT shot FROM takes WHERE id=$i AND project=$p", take, project)
+                ?? throw new DomainError("Take não encontrado neste episódio.");
+            var existing = db.Scalar<string>("SELECT id FROM takes WHERE shot=$s AND disposition='selecionado' AND id<>$i", shot, take);
+            if (existing == null) throw new DomainError("Selecione primeiro a tomada de referência deste plano.");
+            db.Exec("UPDATE takes SET disposition='reprovado',review=$r WHERE id=$i", reason, existing);
+            db.Exec("UPDATE takes SET disposition='selecionado',review=$r WHERE id=$i", reason, take);
+            store.Event(db, project, "estudio.take_substituido", Store.Json(new { shot, antigo = existing, novo = take }));
         });
     }
 
@@ -122,6 +141,8 @@ public sealed class Studio(Store store)
         {
             var episode = Episode(db, project);
             if (Store.AssetIn(db, project, asset).Type is not (".wav" or ".mp3")) throw new DomainError("Escolha um arquivo de áudio do projeto.");
+            if (db.Scalar<long>("SELECT COUNT(*) FROM tracks WHERE episode=$e AND artifact=$a AND role=$r AND start_frame=$s",
+                episode, asset, role, start) != 0) return;
             var id = Store.Id();
             db.Exec("INSERT INTO tracks VALUES($id,$p,$e,$a,$r,$v,$g,$s)", id, project, episode, asset, role, voice, gain, start);
             store.Event(db, project, "estudio.faixa", id);
@@ -286,13 +307,16 @@ public sealed class Studio(Store store)
         catch { File.Delete(package); throw; }
     }
 
-    public string FlowPackage(string project, string shot)
+    public string FlowPackage(string project, string shot, int outputs = 1, int? unitCost = null, string? reference = null, string? connection = null)
     {
         var bible = Current(project) ?? throw new DomainError("Registre a bíblia.");
         var item = Shots(project).SingleOrDefault(value => value.Id == shot) ?? throw new DomainError("Plano não encontrado.");
+        if (outputs is < 1 or > 4 || unitCost is < 0 or > 100000) throw new DomainError("Confira saídas e créditos por saída.");
+        var input = string.IsNullOrEmpty(reference) ? null : store.GetAsset(project, reference);
         return Store.Json(new { schema = 1, mode = "assistida", status = "ensaio externo pendente",
-            project, shot, bible.Version, bible.Text, item.Direction, durationSeconds = item.Frames / (double)Fps,
-            outputs = 1, required = new[] { "Perfil autorizado conferido no Flow oficial", "Revisar modelo, preço e teto de créditos na tela",
+            project, shot, connection, bible.Version, bible.Text, item.Direction, durationSeconds = item.Frames / (double)Fps,
+            reference = input == null ? null : new { input.Name, input.Hash, input.Rights }, outputs, unitCost,
+            expectedCredits = outputs * unitCost, required = new[] { "Perfil autorizado conferido no Flow oficial", "Revisar modelo, preço e teto de créditos na tela",
                 "Confirmar direitos e exportação das referências", "Operador confirma geração e coleta manualmente",
                 "Importar arquivo e recibo sanitizado com identidade mascarada, modo, custo e identificador, se disponível" } });
     }

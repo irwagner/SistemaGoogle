@@ -1,9 +1,27 @@
 @page
 @model RecursosModel
 @{ ViewData["Title"] = "Recursos"; }
-<h1>Recursos</h1>
+<h1>Contas e recursos</h1>
+@{ var metrics = Model.Metrics; }
 @if (Model.Notice != null) { <p class="ok" role="status">@Model.Notice</p> }
 @if (Model.Error != null) { <p class="alert" role="alert">@Model.Error</p> }
+<section class="panel"><h2>Produção registrada</h2>
+    <div class="row">
+        <span>Entregas aceitas <strong>@metrics.Accepted</strong></span>
+        <span>Retrabalhos <strong>@metrics.Rework</strong></span>
+        <span>Espera média <strong>@(metrics.AverageWaitSeconds?.ToString("F1") ?? "—") s</strong></span>
+        <span>Utilização dos dois executores <strong>@(metrics.Utilization?.ToString("P1") ?? "—")</strong></span>
+        <span>Custo por aceite <strong>@(metrics.CostPerAcceptedCents.HasValue ? (metrics.CostPerAcceptedCents.Value / 100).ToString("C") : "Incompleto")</strong>
+            <small>@metrics.CostsKnown de @metrics.Accepted informados</small></span>
+    </div>
+</section>
+<section class="panel">
+    <h2>Conexões por produto</h2>
+    <ul class="list">@foreach (var connection in Model.Connections) {
+        <li><strong>@connection.Product · @connection.Account</strong><small> · @connection.Id · @connection.Profile · @connection.State</small></li>
+    }</ul>
+    <a asp-page="/Google">Autorizações Google</a>
+</section>
 <section class="panel">
     <h2>Observações de cota</h2>
     @if (Model.Observations.Count == 0) { <p>Nenhuma observação. Identidades remotas aguardam ensaio autorizado.</p> }
@@ -12,7 +30,7 @@
     @foreach (var limit in Model.Observations) {
         <tr><td>@limit.Product · @limit.Subject</td><td>@limit.Bucket · @limit.Window</td>
         <td>@(limit.Remaining?.ToString() ?? "Desconhecido") · @limit.Unit · @limit.Status</td>
-        <td>@(limit.Expires <= Model.Now ? "Vencida" : "Vigente")</td><td>@limit.Source</td></tr>
+        <td>@(limit.Expires <= Model.Now ? "Vencida" : "Vigente") @if (limit.Observed is long observed) { <small>· @Math.Max(0,(Model.Now - observed)/60000) min</small> }</td><td>@limit.Source</td></tr>
     }
     </tbody></table></div>
     }
@@ -20,10 +38,28 @@
 <div class="grid">
 <section class="panel"><h2>Registrar observação manual</h2>
     <p>Use identificadores mascarados e vínculos do produto. A observação manual serve de evidência consultiva.</p>
-    <form method="post" asp-page-handler="Observar">
+    <form method="post" asp-page-handler="Registrar">
+        <label>Produto<select name="product"><option value="antigravity">Antigravity</option><option value="flow">Flow</option>
+            <option value="notebook">Gemini Notebook</option><option value="youtube">YouTube</option><option value="ollama">Ollama</option></select></label>
+        <label>Identificador da conexão<input name="connection" required></label>
+        <label>Nome para a conta, sem senha<input name="account" required></label>
+        <label>Perfil<input name="profile" required></label>
+        <label>Versão do provedor<input name="version" required></label>
+        <label>Modelo ou capacidade<input name="model" required></label>
+        <label>Sujeito da cota<input name="subject" placeholder="Projeto, família ou conta identificada" required></label>
+        <label>Grupo de cota<input name="bucket" required></label>
+        <label>Janela<input name="window" required placeholder="Por minuto, mensal ou outro"></label>
+        <label>Unidade<select name="unit"><option value="requests">Requisições</option><option value="tokens">Tokens</option>
+            <option value="creditos">Créditos</option><option value="percentual">Percentual</option></select></label>
+        <label>Estado<select name="status"><option value="unknown">Desconhecido</option><option value="available">Disponível</option><option value="exhausted">Esgotado</option></select></label>
+        <label>Saldo medido<input name="remaining" type="number" min="0"></label>
+        <label>Origem da medida<input name="source" value="Painel do operador" required></label>
+        <button>Registrar conexão e cota</button>
+    </form>
+    <details><summary>Importação de snapshot da versão 0.1.0</summary><form method="post" asp-page-handler="Observar">
         <label>Snapshot JSON<textarea name="snapshot" maxlength="24000" required>@Model.Example</textarea></label>
         <button>Registrar observação</button>
-    </form>
+    </form></details>
 </section>
 <section class="panel"><h2>Carteira</h2>
     <form method="post" asp-page-handler="Carteira">

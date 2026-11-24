@@ -1,0 +1,49 @@
+@page
+@model GoogleModel
+@{ ViewData["Title"] = "Autorizações Google"; }
+<a class="back" asp-page="/Recursos">← Contas e recursos</a>
+<h1>Autorizações Google</h1>
+@if (Model.Error != null) { <p class="alert" role="alert">@Model.Error</p> }
+@if (Model.AuthorizationUrl != null) {
+    <p><a class="button" href="@Model.AuthorizationUrl" rel="noreferrer">Continuar no Google</a></p>
+}
+@if (Model.RestoreHeld) {
+    <section class="panel"><h2>Revisão da restauração</h2>
+        <p>Confira no histórico de cada provedor os efeitos posteriores ao snapshot e os identificadores originais.</p>
+        <form method="post" asp-page-handler="Conciliar">
+            <label>Evidência da conferência<textarea name="evidence" maxlength="1800" required></textarea></label>
+            <label class="row"><input class="check" type="checkbox" name="confirmed" value="true" required> Revisei os efeitos posteriores ao snapshot.</label>
+            <button>Registrar conciliação e liberar novos envios</button>
+        </form>
+    </section>
+}
+<div class="grid"><section class="panel">
+    <h2>Perfis cadastrados</h2>
+    @foreach (var profile in Model.Profiles)
+    {
+        <article class="shot-card">
+            <h3>@profile.Label</h3>
+            <p>@profile.Product · @profile.Cloud · @profile.Expected</p>
+            <p>@(Model.Ready(profile) ? "Autorização armazenada neste Windows" : "Aguardando autorização do titular")</p>
+            <div class="row">
+                <form method="post" asp-page-handler="Autorizar"><input name="profile" type="hidden" value="@profile.Id"><button>Autorizar no Google</button></form>
+                @if (Model.Ready(profile))
+                {
+                    <form method="post" asp-page-handler="Desconectar"><input name="profile" type="hidden" value="@profile.Id"><button class="secondary">Remover concessão local</button></form>
+                }
+            </div>
+        </article>
+    }
+</section><section class="panel">
+    <h2>Adicionar perfil</h2>
+    <p>Use um cliente OAuth do tipo aplicativo para computador, criado pelo titular no projeto Cloud com a API do produto habilitada.</p>
+    <form method="post" asp-page-handler="Configurar">
+        <label>Produto<select name="product"><option value="notebook">Gemini Notebook pessoal</option><option value="youtube">YouTube</option></select></label>
+        <label>Nome do perfil<input name="label" required></label>
+        <label>ID do projeto Google Cloud<input name="cloud" required></label>
+        <label>E-mail da conta fixada<input type="email" name="expected" required></label>
+        <label>ID do cliente desktop<input name="clientId" required autocomplete="off"></label>
+        <label>Segredo do cliente desktop<input type="password" name="clientSecret" required autocomplete="new-password"></label>
+        <button>Guardar perfil no Windows</button>
+    </form>
+</section></div>

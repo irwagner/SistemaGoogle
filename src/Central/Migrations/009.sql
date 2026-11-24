@@ -1,0 +1,4 @@
+CREATE TABLE work_costs (
+ work TEXT PRIMARY KEY REFERENCES work_items(id), cents INTEGER NOT NULL CHECK(cents BETWEEN 0 AND 10000000000),
+ note TEXT NOT NULL, updated TEXT NOT NULL
+);

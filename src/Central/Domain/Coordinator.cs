@@ -5,9 +5,11 @@ namespace Central.Domain;
 public sealed record Connection(string Id, string Account, string Product, string? Identity, string Status, string Profile,
     int Concurrency, bool Isolated, bool? OverageOff, string Version, long VerifiedUntil, string[] AllowedClasses);
 public sealed record Limit(string Id, string Subject, string Product, string Bucket, string Window, string Unit,
-    string Status, long? Remaining, long Expires, long? Reset, string Source);
+    string Status, long? Remaining, long Expires, long? Reset, string Source, long? Observed = null);
 public sealed record Intent(string Project, string Task, int Version, string Key, string PayloadHash, string Connection,
-    string Identity, string Model, string Catalog, string? Wallet, long? UpperCost, bool AdditionalSpend = false);
+    string Identity, string Model, string Catalog, string? Wallet, long? UpperCost, bool AdditionalSpend = false,
+    IReadOnlyDictionary<string, long>? Demand = null);
+public sealed record ResourceCard(string Id, string Product, string Account, string Profile, string State, string Version);
 public sealed record Ticket(string Effect, string Worker, int Fence, long Expires);
 public sealed record Allocation(Ticket? Ticket, string Status);
 public sealed record Effect(string Id, string Task, string State, string? Connection, string? Identity,
@@ -18,7 +20,7 @@ public sealed class Coordinator(Store store)
 {
     private const int LeaseDuration = 30_000;
 
-    public void Record(Connection connection, string model, string catalog, bool retired, IEnumerable<Limit> observations)
+    public void Record(Connection connection, string model, string catalog, bool retired, IEnumerable<Limit> observations, bool append = false)
     {
         ValidateConnection(connection);
         Store.Text(model, 120, "o modelo upstream");
@@ -40,12 +42,12 @@ public sealed class Coordinator(Store store)
                 throw new DomainError("O identificador já pertence a outro produto ou conta.");
             db.Exec("INSERT INTO entitlements VALUES($c,$m,$v,$r) ON CONFLICT(connection,model) DO UPDATE SET version=excluded.version,retired=excluded.retired",
                 connection.Id, model, catalog, retired);
-            db.Exec("DELETE FROM constraints_map WHERE connection=$c AND model=$m", connection.Id, model);
+            if (!append) db.Exec("DELETE FROM constraints_map WHERE connection=$c AND model=$m", connection.Id, model);
             foreach (var limit in observations)
             {
                 Store.Text(limit.Source, 120, "a origem da observação");
                 if (limit.Remaining is < 0 || limit.Status is not ("available" or "exhausted" or "unknown")
-                    || limit.Status == "unknown" && limit.Remaining.HasValue)
+                    || limit.Status == "unknown" && limit.Remaining.HasValue || IsPercent(limit.Unit) && limit.Remaining > 100)
                     throw new DomainError("Observação de cota inválida.");
                 db.Exec("INSERT OR IGNORE INTO quota_subjects VALUES($id,'informado')", limit.Subject);
                 db.Exec("INSERT OR IGNORE INTO quota_keys VALUES($id,$s,$p,$b,$u)", limit.Id, limit.Subject, limit.Product, limit.Bucket, limit.Unit);
@@ -55,10 +57,14 @@ public sealed class Coordinator(Store store)
                 db.Exec("INSERT OR IGNORE INTO quota_windows VALUES($q,$w)", limit.Id, limit.Window);
                 db.Exec("INSERT INTO quota_observations(quota,window,remaining,status,observed,expires,reset,source) VALUES($q,$w,$r,$s,$o,$e,$reset,$src)",
                     limit.Id, limit.Window, limit.Remaining, limit.Status, store.Millis, limit.Expires, limit.Reset, limit.Source);
-                db.Exec("INSERT INTO constraints_map VALUES($c,$m,$q,$w)", connection.Id, model, limit.Id, limit.Window);
+                db.Exec("INSERT OR IGNORE INTO constraints_map VALUES($c,$m,$q,$w)", connection.Id, model, limit.Id, limit.Window);
             }
         });
     }
+
+    public IReadOnlyList<ResourceCard> Connections() => store.Read(db => db.List("""
+        SELECT id,product,account,profile,status,version FROM connections ORDER BY product,id
+        """, r => new ResourceCard(r.GetString(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.GetString(5))));
 
     private static void ValidateConnection(Connection connection)
     {
@@ -91,7 +97,7 @@ public sealed class Coordinator(Store store)
         SELECT l.effect,l.wallet,l.kind,l.amount,l.unit,l.certainty FROM ledger l JOIN effects e ON e.id=l.effect WHERE e.project=$p ORDER BY l.seq
         """, r => new LedgerEntry(r.GetString(0), r.GetString(1), r.GetString(2), r.NullableLong(3), r.GetString(4), r.GetString(5)), project));
     public IReadOnlyList<Limit> Observations() => store.Read(db => db.List("""
-        SELECT k.id,k.subject,k.product,k.bucket,o.window,k.unit,o.status,o.remaining,o.expires,o.reset,o.source
+        SELECT k.id,k.subject,k.product,k.bucket,o.window,k.unit,o.status,o.remaining,o.expires,o.reset,o.source,o.observed
         FROM quota_keys k JOIN quota_observations o ON o.quota=k.id
         WHERE o.seq=(SELECT MAX(recent.seq) FROM quota_observations recent WHERE recent.quota=k.id AND recent.window=o.window)
         ORDER BY k.product,k.subject,k.id,o.window
@@ -103,17 +109,19 @@ public sealed class Coordinator(Store store)
         Store.Text(worker, 100, "o executor");
         if (request.PayloadHash.Length != 64 || request.PayloadHash.Any(c => !char.IsAsciiHexDigitLower(c)))
             throw new DomainError("Hash de entrada inválido.");
+        var demandSignature = DemandSignature(request);
         return store.Write(db =>
         {
             Sweep(db);
             var task = Store.Task(db, request.Project, request.Task);
             var existing = db.One("""
-                SELECT id,state,payload_hash,task,input_version,connection,identity,model,catalog_version
+                SELECT id,state,payload_hash,task,input_version,connection,identity,model,catalog_version,demand_signature
                 FROM effects WHERE project=$p AND logical_key=$k
                 """, r => new Existing(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetInt32(4),
-                r.NullableText(5), r.NullableText(6), r.NullableText(7), r.NullableText(8)), request.Project, request.Key);
+                r.NullableText(5), r.NullableText(6), r.NullableText(7), r.NullableText(8), r.NullableText(9)), request.Project, request.Key);
             if (existing != null && (existing.Hash != request.PayloadHash || existing.Task != request.Task || existing.Version != request.Version ||
-                existing.Connection != request.Connection || existing.Identity != request.Identity || existing.Model != request.Model || existing.Catalog != request.Catalog))
+                existing.Connection != request.Connection || existing.Identity != request.Identity || existing.Model != request.Model ||
+                existing.Catalog != request.Catalog || existing.Demand != null && existing.Demand != demandSignature))
                 throw new DomainError("A intenção já está vinculada a outras entradas.");
             if (existing != null && existing.State is not ("not_sent" or "expired")) return new Allocation(null, existing.State);
             if (task.Version != request.Version || task.Policy != "fixa" || task.State is not ("pronta" or "espera"))
@@ -124,11 +132,14 @@ public sealed class Coordinator(Store store)
             if (reason != null) return Wait(db, request, reason);
             if (db.Scalar<long>("SELECT COUNT(*) FROM leases l JOIN effects e ON e.id=l.effect WHERE l.profile=$p AND e.state IN ('reserved','sending','accepted','ambiguous','identity_mismatch')", connection!.Profile) >= connection.Slots)
                 return Wait(db, request, "perfil_ocupado");
-            foreach (var limit in limits)
+            var quantities = Quantities(request, limits);
+            if (quantities == null) return Wait(db, request, "quantidade_por_unidade_indisponivel");
+            foreach (var (limit, amount) in quantities)
             {
                 var reserved = db.Scalar<long>("SELECT COALESCE(SUM(amount),0) FROM reservations WHERE resource=$r AND window=$w",
                     "quota:" + limit.Id, limit.Window);
-                if (limit.Remaining.HasValue && reserved >= limit.Remaining.Value) return Wait(db, request, "reserva_de_cota");
+                if (amount > limit.Remaining!.Value || reserved > limit.Remaining.Value - amount)
+                    return Wait(db, request, "reserva_de_cota");
             }
             var cost = request.UpperCost;
             var wallet = request.Wallet == null ? null : db.One("SELECT unit,ceiling,spent FROM wallets WHERE id=$w",
@@ -145,18 +156,18 @@ public sealed class Coordinator(Store store)
             var effect = existing?.Id ?? Store.Id();
             if (existing == null)
                 db.Exec("""
-                    INSERT INTO effects(id,project,task,logical_key,payload_hash,input_version,connection,identity,model,catalog_version,state,created)
-                    VALUES($id,$p,$t,$k,$hash,$version,$c,$identity,$model,$catalog,'reserved',$date)
+                    INSERT INTO effects(id,project,task,logical_key,payload_hash,input_version,connection,identity,model,catalog_version,state,created,demand_signature)
+                    VALUES($id,$p,$t,$k,$hash,$version,$c,$identity,$model,$catalog,'reserved',$date,$sig)
                     """, effect, request.Project, request.Task, request.Key, request.PayloadHash, request.Version, request.Connection,
-                    request.Identity, request.Model, request.Catalog, store.Now);
+                    request.Identity, request.Model, request.Catalog, store.Now, demandSignature);
             else db.Exec("UPDATE effects SET state='reserved' WHERE id=$e", effect);
             var fence = checked(1 + (int)db.Scalar<long>("SELECT COALESCE(MAX(fence),0) FROM attempts WHERE effect=$e", effect));
             var expiry = store.Millis + LeaseDuration;
             db.Exec("INSERT INTO leases VALUES($e,$o,$f,$x,$h,$p) ON CONFLICT(effect) DO UPDATE SET owner=excluded.owner,fence=excluded.fence,expires=excluded.expires,heartbeat=excluded.heartbeat,profile=excluded.profile",
                 effect, worker, fence, expiry, store.Millis, connection.Profile);
             db.Exec("INSERT INTO attempts VALUES($e,$f,$w,'reserved',$n)", effect, fence, worker, store.Millis);
-            foreach (var limit in limits.Where(limit => limit.Remaining.HasValue))
-                db.Exec("INSERT INTO reservations VALUES($e,$r,$w,$u,1,$x)", effect, "quota:" + limit.Id, limit.Window, limit.Unit, expiry);
+            foreach (var (limit, amount) in quantities)
+                db.Exec("INSERT INTO reservations VALUES($e,$r,$w,$u,$a,$x)", effect, "quota:" + limit.Id, limit.Window, limit.Unit, amount, expiry);
             if (wallet != null)
             {
                 db.Exec("INSERT INTO reservations VALUES($e,$r,'budget',$u,$a,$x)", effect, "wallet:" + request.Wallet, wallet.Unit, cost, expiry);
@@ -187,13 +198,33 @@ public sealed class Coordinator(Store store)
         if (db.Scalar<long>("SELECT COUNT(*) FROM entitlements WHERE connection=$c AND model=$m AND version=$v AND retired=0",
             request.Connection, request.Model, request.Catalog) == 0) return "modelo_ou_catalogo_inelegivel";
         limits = db.List("""
-            SELECT k.id,k.subject,k.product,k.bucket,m.window,k.unit,o.status,o.remaining,o.expires,o.reset,o.source
+            SELECT k.id,k.subject,k.product,k.bucket,m.window,k.unit,o.status,o.remaining,o.expires,o.reset,o.source,o.observed
             FROM constraints_map m JOIN quota_keys k ON k.id=m.quota JOIN quota_observations o ON o.quota=m.quota AND o.window=m.window
             WHERE m.connection=$c AND m.model=$m AND o.seq=(SELECT MAX(latest.seq) FROM quota_observations latest WHERE latest.quota=m.quota AND latest.window=m.window)
             """, MapLimit, request.Connection, request.Model);
         if (limits.Count == 0 || limits.Any(limit => limit.Status == "unknown")) return "cota_desconhecida";
         if (limits.Any(limit => limit.Expires <= store.Millis)) return "snapshot_vencido";
         return limits.Any(limit => limit.Status == "exhausted" || limit.Remaining == 0) ? "cota_esgotada" : null;
+    }
+
+    private static bool IsPercent(string unit) => unit is "%" or "percentual" or "percent";
+    private static string DemandSignature(Intent request)
+    {
+        if (request.Demand?.Any(pair => string.IsNullOrWhiteSpace(pair.Key) || pair.Key.Length > 40 || pair.Value <= 0 || IsPercent(pair.Key)) == true)
+            throw new DomainError("Demanda deve ser positiva e usar unidade contável.");
+        return Store.Json(new { units = request.Demand?.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray(),
+            request.Wallet, request.UpperCost, request.AdditionalSpend });
+    }
+    private static List<(Limit Limit, long Amount)>? Quantities(Intent request, IReadOnlyList<Limit> limits)
+    {
+        var result = new List<(Limit, long)>();
+        foreach (var limit in limits.Where(limit => limit.Remaining.HasValue && !IsPercent(limit.Unit)))
+        {
+            if (request.Demand?.TryGetValue(limit.Unit, out var amount) == true) result.Add((limit, amount));
+            else if (limit.Unit == "requests") result.Add((limit, 1));
+            else return null;
+        }
+        return result;
     }
 
     public void BeginSend(Intent intent, Ticket ticket)
@@ -210,11 +241,14 @@ public sealed class Coordinator(Store store)
             if (reason != null) throw new DomainError(reason);
             if (db.Scalar<string>("SELECT profile FROM leases WHERE effect=$e", ticket.Effect) != resource!.Profile)
                 throw new DomainError("O perfil mudou após a reserva.");
-            var reservedLimits = db.List("SELECT resource,window FROM reservations WHERE effect=$e AND resource LIKE 'quota:%'",
-                r => (r.GetString(0), r.GetString(1)), ticket.Effect);
-            if (!reservedLimits.ToHashSet().SetEquals(limits.Where(l => l.Remaining.HasValue).Select(l => ("quota:" + l.Id, l.Window))))
+            var demand = db.Scalar<string>("SELECT demand_signature FROM effects WHERE id=$e", ticket.Effect);
+            var quantities = Quantities(intent, limits);
+            var reservedLimits = db.List("SELECT resource,window,amount FROM reservations WHERE effect=$e AND resource LIKE 'quota:%'",
+                r => (r.GetString(0), r.GetString(1), r.GetInt64(2)), ticket.Effect);
+            if (demand != null && demand != DemandSignature(intent) || quantities == null ||
+                !reservedLimits.ToHashSet().SetEquals(quantities.Select(q => ("quota:" + q.Limit.Id, q.Limit.Window, q.Amount))))
                 throw new DomainError("Os limites mudaram após a reserva.");
-            foreach (var limit in limits.Where(limit => limit.Remaining.HasValue))
+            foreach (var (limit, _) in quantities)
                 if (db.Scalar<long>("SELECT COALESCE(SUM(amount),0) FROM reservations WHERE resource=$r AND window=$w", "quota:" + limit.Id, limit.Window) > limit.Remaining)
                     throw new DomainError("A capacidade observada caiu após a reserva.");
             var financial = db.One("""
@@ -400,8 +434,8 @@ public sealed class Coordinator(Store store)
     private static Effect MapEffect(SqliteDataReader row) => new(row.GetString(0), row.GetString(1), row.GetString(2),
         row.NullableText(3), row.NullableText(4), row.NullableText(5), row.NullableText(6), row.NullableText(7));
     private static Limit MapLimit(SqliteDataReader row) => new(row.GetString(0), row.GetString(1), row.GetString(2), row.GetString(3),
-        row.GetString(4), row.GetString(5), row.GetString(6), row.NullableLong(7), row.GetInt64(8), row.NullableLong(9), row.GetString(10));
-    private sealed record Existing(string Id, string State, string Hash, string Task, int Version, string? Connection, string? Identity, string? Model, string? Catalog);
+        row.GetString(4), row.GetString(5), row.GetString(6), row.NullableLong(7), row.GetInt64(8), row.NullableLong(9), row.GetString(10), row.GetInt64(11));
+    private sealed record Existing(string Id, string State, string Hash, string Task, int Version, string? Connection, string? Identity, string? Model, string? Catalog, string? Demand);
     private sealed record Resource(string? Identity, string Status, string Profile, int Slots, bool Isolated, bool? OverageOff, long? Until, string Classes);
     private sealed record Budget(string Unit, long? Ceiling, long Spent);
     private sealed record Financial(string Resource, long Amount, long? Ceiling, long Spent);

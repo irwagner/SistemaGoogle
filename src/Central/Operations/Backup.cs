@@ -8,6 +8,24 @@ public static class Backup
 {
     private sealed record Snapshot(int Schema, string DatabaseHash, string[] Objects);
 
+    public static bool Held(Store store) => store.Read(db => db.Scalar<long>("SELECT COUNT(*) FROM service_flags WHERE key='restore_hold'") != 0);
+
+    public static void ConfirmReview(Store store, string? evidence, bool confirmed)
+    {
+        evidence = Store.Text(evidence, 1800, "o registro da conciliação posterior ao snapshot");
+        if (!confirmed) throw new DomainError("Confirme a revisão do histórico de todos os provedores usados.");
+        store.Write(db =>
+        {
+            if (db.Scalar<long>("""
+                SELECT (SELECT COUNT(*) FROM effects WHERE state IN ('sending','accepted','ambiguous','identity_mismatch')) +
+                       (SELECT COUNT(*) FROM notebook_jobs WHERE state IN ('enviando','indeterminado','PROCESSING')) +
+                       (SELECT COUNT(*) FROM deliveries WHERE state IN ('enviando','consulta_pendente','conciliar_sem_sessao'))
+                """) != 0) throw new DomainError("Há efeitos abertos. Confirme o resultado original antes de liberar novos envios.");
+            db.Exec("DELETE FROM service_flags WHERE key='restore_hold'");
+            db.Exec("INSERT OR REPLACE INTO service_flags VALUES('restore_review',$r)", Store.Json(new { date = store.Now, evidence }));
+        });
+    }
+
     public static void Create(Store store, string destination)
     {
         var target = Path.GetFullPath(destination);
@@ -21,6 +39,7 @@ public static class Backup
         {
             output.Open();
             source.BackupDatabase(output);
+            output.Exec("PRAGMA journal_mode=DELETE");
         }
         var (schema, objects) = Inspect(file);
         foreach (var hash in objects)

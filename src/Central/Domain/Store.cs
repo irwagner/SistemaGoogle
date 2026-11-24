@@ -117,7 +117,10 @@ public sealed class Store
         return path;
     }
 
-    public IReadOnlyList<Project> Projects() => Read(db => db.List("SELECT id,name,kind,classification FROM projects ORDER BY created DESC", MapProject));
+    public IReadOnlyList<Project> Projects() => Read(db => db.List("""
+        SELECT id,name,kind,classification FROM projects
+        WHERE NOT EXISTS(SELECT 1 FROM work_scopes WHERE scope=projects.id) ORDER BY created DESC
+        """, MapProject));
     public Project GetProject(string id) => Read(db => db.One("SELECT id,name,kind,classification FROM projects WHERE id=$id", MapProject, id))
         ?? throw new DomainError("Projeto não encontrado.");
     private static Project MapProject(SqliteDataReader row) => new(row.GetString(0), row.GetString(1), row.GetString(2), row.GetString(3));
@@ -220,7 +223,7 @@ public sealed class Store
         if (filename.Any(char.IsControl) || filename.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || filename is "." or "..")
             throw new DomainError("Nome de arquivo inválido.");
         var type = Path.GetExtension(filename).ToLowerInvariant();
-        if (type is not (".txt" or ".md" or ".json" or ".csv" or ".srt" or ".pdf" or ".png" or ".jpg" or ".webp" or ".mp4" or ".mov" or ".webm" or ".wav" or ".mp3" or ".bundle" or ".patch" or ".zip"))
+        if (type is not (".txt" or ".md" or ".json" or ".csv" or ".srt" or ".pdf" or ".png" or ".jpg" or ".webp" or ".mp4" or ".mov" or ".webm" or ".wav" or ".mp3" or ".bundle" or ".patch" or ".zip" or ".html" or ".css" or ".js" or ".cs" or ".csproj" or ".py" or ".docx" or ".pptx"))
             throw new DomainError("Extensão indisponível para importação.");
         origin = Text(origin, 160, "a origem");
         rights = Text(rights, 250, "a permissão de uso");
@@ -291,13 +294,13 @@ public sealed class Store
             ".jpg" => length >= 3 && header[0] == 255 && header[1] == 216 && header[2] == 255,
             ".mp4" or ".mov" => length >= 12 && header[4..8].SequenceEqual("ftyp"u8),
             ".wav" => length >= 12 && header[..4].SequenceEqual("RIFF"u8) && header[8..12].SequenceEqual("WAVE"u8),
-            ".zip" => header[..length].StartsWith("PK"u8),
+            ".zip" or ".docx" or ".pptx" => header[..length].StartsWith("PK"u8),
             ".webm" => length >= 4 && header[0] == 0x1a && header[1] == 0x45 && header[2] == 0xdf && header[3] == 0xa3,
             ".webp" => length >= 12 && header[..4].SequenceEqual("RIFF"u8) && header[8..12].SequenceEqual("WEBP"u8),
             _ => true
         };
         if (!valid) throw new DomainError("O conteúdo não corresponde à extensão.");
-        if (type is not (".txt" or ".md" or ".json" or ".csv" or ".srt" or ".patch")) return;
+        if (type is not (".txt" or ".md" or ".json" or ".csv" or ".srt" or ".patch" or ".html" or ".css" or ".js" or ".cs" or ".csproj" or ".py")) return;
         stream.Position = 0;
         try
         {

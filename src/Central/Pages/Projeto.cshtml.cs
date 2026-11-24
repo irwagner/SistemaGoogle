@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Central.Pages;
 
-public sealed class ProjetoModel(Store store, Coordinator coordinator, Studio studio, Research research, Software software) : PageModel
+public sealed class ProjetoModel(Store store, Coordinator coordinator, Studio studio, Research research, Software software, VideoStories video, Workbench workbench) : PageModel
 {
     public Project Project { get; private set; } = null!;
     public string Section { get; private set; } = "trabalho";
@@ -25,6 +25,8 @@ public sealed class ProjetoModel(Store store, Coordinator coordinator, Studio st
     public IReadOnlyList<Question> Questions => research.Questions(Project.Id);
     public IReadOnlyList<Source> Sources => research.Sources(Project.Id);
     public IReadOnlyList<Claim> Claims => research.Claims(Project.Id);
+    public EpisodeScope? Scope => video.Owner(Project.Id);
+    public IReadOnlyList<WorkItem> Works => workbench.List(project: Project.Id);
     [TempData] public string? Notice { get; set; }
     public string? Error { get; private set; }
     public string Key { get; } = Store.Id();
@@ -65,6 +67,8 @@ public sealed class ProjetoModel(Store store, Coordinator coordinator, Studio st
         Change(id, "estudio", () => studio.AddTake(id, shot, asset, parameters), "Take acrescentado para revisão.");
     public IActionResult OnPostRevisarTake(string id, string take, bool select, string notes) =>
         Change(id, "estudio", () => studio.ReviewTake(id, take, select, notes), "Decisão de continuidade registrada.");
+    public IActionResult OnPostTrocarTake(string id, string take, string reason) =>
+        Change(id, "estudio", () => studio.ReplaceTake(id, take, reason), "Somente o take deste plano mudou. Registre outra timeline para exportar.");
     public IActionResult OnPostFaixa(string id, string asset, string role, string voice, double gain, int start) =>
         Change(id, "estudio", () => studio.AddTrack(id, asset, role, voice, gain, start), "Faixa acrescentada.");
     public IActionResult OnPostEdicao(string id) =>
@@ -72,7 +76,14 @@ public sealed class ProjetoModel(Store store, Coordinator coordinator, Studio st
     public IActionResult OnPostRevisarEdicao(string id, string edit, bool accept, string notes) =>
         Change(id, "estudio", () => studio.ReviewEdit(id, edit, accept, notes), "Revisão do master registrada.");
     public IActionResult OnGetFlow(string id, string shot) =>
-        Download(() => studio.FlowPackage(id, shot), "application/json", "ficha-flow.json");
+        Download(() => studio.FlowPackage(id, shot, connection: FlowConnection(id)), "application/json", "ficha-flow.json");
+    public IActionResult OnPostFlow(string id, string shot, int outputs, int? unitCost, string? reference) =>
+        Download(() =>
+        {
+            if (!ModelState.IsValid) throw new DomainError("Confira saídas e custo em créditos.");
+            return studio.FlowPackage(id, shot, outputs, unitCost, reference, FlowConnection(id));
+        }, "application/json", "ficha-flow.json");
+    private string? FlowConnection(string id) => video.Owner(id) is { } owner ? workbench.Resource(owner.Work) : null;
     public IActionResult OnGetProbe(string id, string edit) =>
         Download(() => studio.Probe(id, edit), "application/json", "ffprobe.json");
     public IActionResult OnGetArquivo(string id, string asset, bool inline = false)
@@ -82,6 +93,8 @@ public sealed class ProjetoModel(Store store, Coordinator coordinator, Studio st
             var item = store.GetAsset(id, asset);
             var path = store.Verify(item);
             if (inline && item.Type == ".mp4") return new PhysicalFileResult(path, "video/mp4") { EnableRangeProcessing = true };
+            if (inline && item.Type is ".wav" or ".mp3")
+                return new PhysicalFileResult(path, item.Type == ".wav" ? "audio/wav" : "audio/mpeg") { EnableRangeProcessing = true };
             return PhysicalFile(path, "application/octet-stream", item.Name);
         }
         catch (DomainError) { return NotFound(); }

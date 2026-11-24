@@ -1,5 +1,15 @@
 # Evidências e reprodução
 
+## Continuação 0.2.0
+
+As jornadas novas estão no script scripts/verificar-continuacao.py. Ele abre trabalhos pelos formulários da Central, usa Ollama local, encerra e reabre processos, verifica a migração em uma cópia da 0.1.0 e confere que conversas e arquivos não passam de um trabalho ao outro. Também percorre a devolução de um patch de operador, a montagem de três planos, o vínculo de áudio à cena, o relatório com referências e o pacote por destino. Os scripts verificar-central-browser.js e verificar-sistema-browser.js exercitam a navegação no Edge e o HTML entregue.
+
+Na suíte de domínio, os 19 casos anteriores e os cinco novos cobrem cotas, concorrência, efeitos ambíguos, retomada e dependência, recuperação de backup cifrado, cofre Windows e falha de gravação injetada. O script Verificar-Instalacao.ps1 testa 0.1.0 → 0.2.0 → 0.1.0. O último passo usa os dados anteriores à migração.
+
+Conexões Google requerem confirmação do titular. Ollama, Git, FFmpeg e ffprobe são as superfícies de execução real usadas localmente. Os ensaios de Notebook e YouTube sem login ficam limitados a contratos, estados e protocolo. [Guia da 0.2.0](VERSAO_0.2.0.md)
+
+## Histórico 0.1.0
+
 ## Pilotos locais
 
 - **Oficina Horizonte.** Codex implementou e revisou uma aplicação de orçamento de um item. Criou duas worktrees e integrou implementação e aceite em main. Um conflito Git foi detectado e abandonado em worktree separada. O piloto pausou na Central depois de baixar o pacote com SHA da base. Após reiniciar, o hash foi reconferido, o trabalho retomou e o mesmo orçamento de R$ 143,70 foi verificado no aplicativo integrado e no binário publicado. Quantidade zero e reenvio divergente foram rejeitados. O Git bundle verifica a cadeia e permite clonar a branch entregue.

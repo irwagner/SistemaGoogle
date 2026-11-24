@@ -1,0 +1,178 @@
+@page "/trabalhos/{id}"
+@model TrabalhoModel
+@{
+    var item = Model.Item;
+    var files = Model.Files;
+    var states = new[] { "Solicitação", "Plano", "Execução", "Revisão" };
+    var current = item.State switch { "rascunho" => 0, "plano" => 1, "revisao" or "aceito" => 3, _ => 2 };
+    ViewData["Title"] = item.Title;
+}
+<a class="back" asp-page="/Area" asp-route-area="@item.Area" asp-route-project="@item.Project">← @Workbench.Areas[item.Area]</a>
+<div class="work-heading">
+    <div><div class="crumb"><a asp-page="/Projeto" asp-route-id="@Model.Project.Id">@Model.Project.Name</a>
+        <span>/</span> @Workbench.Modes(item.Area)[item.Mode]</div><h1>@item.Title</h1></div>
+    <span class="status" data-current-state="@item.State">@TrabalhoModel.StateLabel(item.State)</span>
+</div>
+<ol class="steps" aria-label="Etapas do trabalho">
+    @for (var i = 0; i < states.Length; i++) { <li aria-current="@(i == current ? "step" : null)">@states[i]</li> }
+</ol>
+@if (Model.Error != null) { <p class="alert" role="alert">@Model.Error</p> }
+@if (item.Note.Length > 0) { <p class="notice" role="status">@item.Note</p> }
+<div class="work-grid" data-workspace data-revision="@item.Revision" data-live="@(item.State is "fila" or "rodando" ? "true" : "false")">
+<div>
+<section class="panel">
+    <h2>Pedido</h2>
+    @if (Model.Editable)
+    {
+        <form method="post" asp-page-handler="Pedido">
+            <input type="hidden" name="revision" value="@item.Revision">
+            <label>Descrição do resultado<textarea name="body" data-draft="pedido" rows="5" maxlength="14000" required>@Model.RequestDraft</textarea></label>
+            <div class="row"><button class="secondary">Salvar pedido</button><small data-save-status aria-live="polite"></small></div>
+        </form>
+        @if (item.Area is "programacao" or "video")
+        {
+            <form method="post" asp-page-handler="Planejar">
+                <input type="hidden" name="revision" value="@item.Revision">
+                @if (Model.Models.Count > 0)
+                {
+                    <label>Modelo local<select name="model">@foreach (var local in Model.Models) { <option value="@local" selected="@(item.Model == local)">@local</option> }</select></label>
+                    <div class="row"><button name="action" value="modelo">Gerar plano com Ollama</button><button class="secondary" name="action" value="modelo-editavel">Usar plano editável</button></div>
+                }
+                else
+                {
+                    <p class="muted">Ollama local indisponível. Você pode preencher o plano e seguir com o percurso assistido.</p>
+                    <button class="secondary" name="action" value="modelo-editavel">Usar plano editável</button>
+                }
+            </form>
+        }
+    }
+    else { <p class="preserve">@item.Request</p> }
+</section>
+@if (item.Plan.Length > 0)
+{
+    <section class="panel">
+        <h2>Plano</h2>
+        <p class="muted">Origem · @item.PlanSource</p>
+        @if (item.State == "plano")
+        {
+            <form method="post" asp-page-handler="Plano">
+                <input type="hidden" name="revision" value="@item.Revision">
+                <label>Plano para revisar<textarea name="plan" data-draft="plano" rows="10" maxlength="16000" required>@Model.PlanDraft</textarea></label>
+                @if (item.Area == "programacao")
+                {
+                    <label>Executor<select name="executor">
+                        @if (item.Mode == "criar" && Model.Models.Count > 0) { <option value="ollama">Ollama local · sistema HTML</option> }
+                        <option value="assistido">Assistido · cliente oficial e devolução de arquivos</option>
+                    </select></label>
+                    @if (item.Mode == "criar" && Model.Models.Count > 0)
+                    {
+                        <label>Modelo para execução local<select name="model">@foreach (var local in Model.Models) { <option value="@local" selected="@(item.Model == local)">@local</option> }</select></label>
+                    }
+                    @if (item.Mode != "criar") { <small>Vincule um Git bundle antes de enviar para a fila.</small> }
+                }
+                else { <input type="hidden" name="executor" value="assistido"> }
+                <div class="row"><button class="secondary" name="action" value="salvar">Salvar plano</button>
+                    <button name="action" value="confirmar">Aprovar plano@(item.Area == "programacao" ? " e pôr na fila" : "")</button>
+                    <small data-save-status aria-live="polite"></small></div>
+            </form>
+        }
+        else { <details><summary>Ler plano aprovado</summary><p class="preserve">@item.Plan</p></details> }
+    </section>
+}
+@if (item.Area != "programacao")
+{
+    <partial name="_AreaTrabalho" model="Model" />
+}
+@if (item.Area == "programacao" && (Model.Runs.Count > 0 || item.State is "aguardando" or "revisao" or "fila" or "pausado"))
+{
+    <section class="panel">
+        <h2>Execução e entrega</h2>
+        @foreach (var run in Model.Runs) { <p><strong>@run.Phase</strong> · @run.Worker · @TrabalhoModel.StateLabel(run.State) <small>@ProjetoModel.DisplayTime(run.Started)</small></p> }
+        @if (item.State == "aguardando")
+        {
+            <p>Baixe o pacote e use a revisão base no cliente oficial. Vincule o recibo e o patch devolvidos para verificar a entrega.</p>
+            <form method="post" asp-page-handler="Receber">
+                <input type="hidden" name="revision" value="@item.Revision"><button>Verificar devolução</button>
+            </form>
+        }
+        @if (item.State is "fila" or "rodando" or "pausado" or "falhou" or "aguardando" or "revisao")
+        {
+            <form method="post" asp-page-handler="Acao">
+                <input type="hidden" name="revision" value="@item.Revision">
+                <div class="row">
+                    @if (item.State is "fila" or "rodando") { <button class="secondary" name="action" value="pausar">Pausar execução</button> }
+                    @if ((item.State is "pausado" or "falhou") && item.Phase.Length > 0) { <button name="action" value="retomar">Retomar da etapa</button> }
+                    @if (item.State is "fila" or "rodando" or "pausado" or "aguardando") { <button class="secondary" name="action" value="cancelar">Cancelar</button> }
+                    @if (item.State == "revisao") { <button name="action" value="aceitar">Aceitar entrega</button> }
+                </div>
+            </form>
+        }
+    </section>
+}
+<section class="panel">
+    <h2>Arquivos, diferenças e testes</h2>
+    @if (files.Count == 0) { <p class="muted">Os resultados e arquivos vinculados aparecem aqui.</p> }
+    <ul class="list work-files">
+        @foreach (var file in files)
+        {
+            <li><div class="row"><strong>@file.Asset.Name</strong><small>@file.Role · @file.Asset.Origin</small></div>
+                <div class="row"><a asp-page-handler="Arquivo" asp-route-asset="@file.Asset.Id">Baixar arquivo</a>
+                @if (file.Asset.Type is ".txt" or ".md" or ".json" or ".patch" or ".html" or ".cs" or ".py")
+                { <a asp-page-handler="Arquivo" asp-route-asset="@file.Asset.Id" asp-route-read="true" target="_blank" rel="noopener">Ler conteúdo</a> }
+                </div><code>@file.Asset.Hash</code>
+            </li>
+        }
+    </ul>
+    @if (item.State is not ("fila" or "rodando" or "aceito" or "cancelado"))
+    {
+        <details><summary>Importar ou vincular arquivo</summary>
+            <form method="post" enctype="multipart/form-data" asp-page-handler="Importar">
+                <label>Arquivo<input type="file" name="file" required></label>
+                <label>Função<select name="role"><option value="referencia">Referência</option><option value="repositorio">Repositório (.bundle)</option>
+                    <option value="patch">Diff devolvido (.patch)</option><option value="recibo">Recibo ou testes do operador</option><option value="arquivo">Arquivo de apoio</option></select></label>
+                <label>Origem<input name="origin" value="Fornecido pelo operador" required></label>
+                <label>Permissão<input name="rights" required placeholder="Escopo em que o arquivo pode ser usado"></label>
+                <button class="secondary">Importar para este trabalho</button>
+            </form>
+            @if (Model.ProjectFiles.Count > 0)
+            {
+                <form method="post" asp-page-handler="Vincular">
+                    <label>Arquivo já no projeto<select name="asset">@foreach (var asset in Model.ProjectFiles) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+                    <label>Função<select name="role"><option value="referencia">Referência</option><option value="repositorio">Repositório (.bundle)</option><option value="patch">Diff devolvido (.patch)</option><option value="recibo">Recibo</option></select></label>
+                    <button class="secondary">Vincular ao trabalho</button>
+                </form>
+            }
+        </details>
+    }
+</section>
+</div>
+<aside class="panel conversation">
+    <h2>Conversa do trabalho</h2>
+    <ol class="message-list">
+        @foreach (var entry in Model.Messages) {
+            <li><div class="message-head"><strong>@entry.Author</strong><small>@ProjetoModel.DisplayTime(entry.Created)</small></div><p class="preserve">@entry.Body</p></li>
+        }
+    </ol>
+    <form method="post" asp-page-handler="Mensagem">
+        <label>Registrar mensagem<textarea name="body" maxlength="5000" rows="3" required></textarea></label>
+        <button class="secondary">Registrar na conversa</button>
+    </form>
+    @if (Model.Resources.Count > 0 && item.State is not ("fila" or "rodando" or "aguardando" or "revisao" or "aceito" or "cancelado"))
+    {
+        <form method="post" asp-page-handler="Recurso">
+            <label>Conexão deste trabalho<select name="connection">
+                <option value="">Executor escolhido no plano</option>
+                @foreach (var resource in Model.Resources) { <option value="@resource.Id" selected="@(Model.Resource == resource.Id)">@resource.Product · @resource.Account · @resource.Profile</option> }
+            </select></label>
+            <button class="secondary">Fixar seleção</button>
+        </form>
+    }
+    else if (Model.Resource != null) { <p class="muted">Conexão fixada · @Model.Resource</p> }
+    <details><summary>Custo deste trabalho</summary><form method="post" asp-page-handler="Custo">
+        <label>Valor em centavos de real<input type="number" min="0" name="cents" placeholder="Desconhecido se vazio"></label>
+        <label>Origem e composição do custo<input name="note" maxlength="500"></label>
+        <button class="secondary">Registrar custo</button>
+    </form></details>
+</aside>
+</div>
+<script src="/trabalho.js" defer></script>

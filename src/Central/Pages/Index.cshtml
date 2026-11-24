@@ -1,7 +1,30 @@
 @page
 @model IndexModel
-@{ ViewData["Title"] = "Projetos"; }
-<h1>Projetos</h1>
+@{ ViewData["Title"] = "Início"; }
+<h1>O que você quer produzir?</h1>
+<section aria-label="Áreas de trabalho" class="area-grid">
+    @foreach (var area in Workbench.Areas)
+    {
+        <article class="area-tile">
+            <h2><a asp-page="/Area" asp-route-area="@area.Key">@area.Value</a></h2>
+            <div class="tile-actions">
+                @foreach (var mode in Workbench.Modes(area.Key).Take(2))
+                { <a asp-page="/Area" asp-route-area="@area.Key" asp-route-mode="@mode.Key">@mode.Value <span aria-hidden="true">↗</span></a> }
+            </div>
+        </article>
+    }
+    <article class="area-tile"><h2><a asp-page="/Recursos">Contas e recursos</a></h2>
+        <div class="tile-actions"><a asp-page="/Recursos">Ver conexões, cotas e custos <span aria-hidden="true">↗</span></a></div>
+    </article>
+</section>
+<section class="resume-strip">
+    <h2>Continuar de onde parei</h2>
+    @if (Model.Recent.Count == 0) { <p class="muted">Abra um trabalho em uma das áreas acima para começar.</p> }
+    <ul class="list">@foreach (var item in Model.Recent) {
+        <li><a asp-page="/Trabalho" asp-route-id="@item.Id">@item.Title</a>
+            <small>@Workbench.Areas[item.Area] · @TrabalhoModel.StateLabel(item.State)</small></li>
+    }</ul>
+</section>
 <div class="grid">
     <section class="panel">
         <h2>Seus projetos</h2>

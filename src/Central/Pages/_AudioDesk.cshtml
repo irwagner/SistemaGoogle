@@ -1,0 +1,32 @@
+@model TrabalhoModel
+@{
+    var episodes = Model.OtherEpisodes;
+    var tracks = Model.Files.Where(file => file.Asset.Type is ".wav" or ".mp3").ToArray();
+    var reviews = Model.Audio;
+}
+<section class="panel">
+    <h2>Faixas deste trabalho</h2>
+    @if (tracks.Length == 0) { <p>Importe ou vincule um WAV ou MP3 na seção Arquivos.</p> }
+    @foreach (var file in tracks) {
+        var review = reviews.FirstOrDefault(r => r.Asset.Id == file.Asset.Id);
+        <article class="shot-card">
+            <h3>@file.Asset.Name</h3><p class="muted">@file.Asset.Origin · @file.Asset.Rights</p>
+            <audio controls preload="metadata" src="@Url.Page("/Projeto", "Arquivo", new { id = Model.Project.Id, asset = file.Asset.Id, inline = true })"></audio>
+            @if (review != null) { <p>@review.Seconds.ToString("F2") s · @review.Role · @(review.Approved ? "Aprovada" : "Em revisão")</p> }
+            <form method="post" asp-page-handler="RevisarAudio">
+                <input name="asset" value="@file.Asset.Id" type="hidden">
+                <label>Função<select name="role"><option value="voz">Voz / narração</option><option value="trilha">Trilha</option><option value="efeitos">Efeitos</option></select></label>
+                <label>Autoria, direitos e revisão<input name="note" value="@review?.Note" required></label>
+                <div class="row"><button class="secondary" name="approved" value="false">Medir e salvar revisão</button><button name="approved" value="true">Medir e aprovar faixa</button></div>
+            </form>
+            @if (review?.Approved == true && episodes.Count > 0) {
+                <form method="post" asp-page-handler="EnviarAudio">
+                    <input name="asset" value="@file.Asset.Id" type="hidden">
+                    <label>Episódio<select name="episode">@foreach (var episode in episodes) { <option value="@episode.Id">@episode.Title</option> }</select></label>
+                    <label>Cena<input name="scene" type="number" min="1" value="1" required></label>
+                    <button class="secondary">Vincular faixa à cena</button>
+                </form>
+            }
+        </article>
+    }
+</section>

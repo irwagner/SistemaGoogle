@@ -1,0 +1,70 @@
+@model TrabalhoModel
+@{
+    var sources = Model.Sources;
+    var claims = Model.Claims;
+    var profiles = Model.Profiles("notebook");
+}
+<section class="panel">
+    <div class="row"><h2>Fontes e afirmações</h2><a asp-page-handler="Relatorio">Baixar relatório com referências</a></div>
+    @foreach (var source in sources) {
+        <article class="shot-card" data-source="@source.Id">
+            <h3>@source.Name</h3><p>@source.Excerpt</p><code>@source.Locator</code><p><small>@source.Author · @source.Rights</small></p>
+            @foreach (var claim in claims.Where(c => c.Source == source.Id)) {
+                <p data-claim="@claim.Id">@claim.Text <small>@(claim.Inference ? "Inferência" : "Afirmação") · @claim.Review</small></p>
+                <form method="post" asp-page-handler="RevisaoFonte">
+                    <input type="hidden" name="claim" value="@claim.Id">
+                    <label>Revisão<input name="notes" required></label>
+                    <button class="secondary" name="approved" value="true">Aprovar afirmação</button>
+                </form>
+            }
+        </article>
+    }
+    <details open="@(sources.Count == 0)"><summary>Adicionar fonte</summary>
+        <form method="post" asp-page-handler="Fonte">
+            <label>Título<input name="label" required></label><label>URL pública HTTPS ou SHA-256<input name="locator" required></label>
+            <label>Autor<input name="author" required></label><label>Permissão<input name="rights" required></label>
+            <label>Trecho, página ou localização<textarea name="excerpt" required></textarea></label><button>Guardar fonte</button>
+        </form>
+    </details>
+    @if (sources.Count > 0) {
+        <details><summary>Registrar afirmação</summary><form method="post" asp-page-handler="Afirmacao">
+            <label>Fonte<select name="source">@foreach (var source in sources) { <option value="@source.Id">@source.Name</option> }</select></label>
+            <label>Afirmação<textarea name="claim" required></textarea></label>
+            <label class="row"><input class="check" name="inference" value="true" type="checkbox"> É uma inferência</label>
+            <button>Registrar afirmação</button>
+        </form></details>
+    }
+</section>
+<section class="panel">
+    <h2>Gemini Notebook</h2>
+    @if (profiles.Count == 0) { <p>Autorize uma conta Google pessoal com cliente desktop no projeto Cloud que fará a ingestão. <a asp-page="/Google">Autorizações Google</a></p> }
+    else {
+        <form method="post" asp-page-handler="Notebook">
+            <label>Perfil e projeto Cloud<select name="account">@foreach (var profile in profiles) {
+                <option value="@profile.Id">@profile.Label · @profile.Cloud · @profile.Expected</option>
+            }</select></label>
+            <label>Caderno de destino<input name="destination" placeholder="notebooks/ID. Vazio para criar caderno"></label>
+            <label>Título do caderno ou fonte<input name="label" maxlength="500" required></label>
+            <label>Texto a enviar<textarea name="body" maxlength="15000"></textarea></label>
+            <label>Arquivo vinculado<select name="asset"><option value="">Sem arquivo</option>
+                @foreach (var file in Model.Files) { <option value="@file.Asset.Id">@file.Asset.Name</option> }
+            </select></label>
+            <label class="row"><input class="check" name="authorized" value="true" type="checkbox" required>
+                Autorizo enviar o conteúdo especificado a este caderno e usar a API deste projeto Cloud.
+            </label>
+            <button>Enfileirar operação do Notebook</button>
+        </form>
+    }
+    <ul class="list">@foreach (var job in Model.Ingestion) {
+        <li><strong>@job.Label · @job.State</strong><p>@job.Remote @job.Error</p>
+            @if (job.State == "indeterminado") {
+                <form method="post" asp-page-handler="ConciliarNotebook"><input type="hidden" name="job" value="@job.Id">
+                    <label>Identificador confirmado no Notebook<input name="remote" required></label><button>Consultar efeito original</button>
+                </form>
+            }
+            @if (job.State == "aguardando") {
+                <form method="post" asp-page-handler="RetomarNotebook"><input type="hidden" name="job" value="@job.Id"><button>Retomar verificação</button></form>
+            }
+        </li>
+    }</ul>
+</section>

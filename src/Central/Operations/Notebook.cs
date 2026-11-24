@@ -22,7 +22,7 @@ public sealed partial class Notebook(HttpClient client)
             ["readQuota"] = "documentado; leitura de saldo unsupported", ["prepare"] = "experimental",
             ["submit"] = "experimental; criar caderno e fonte de texto", ["inspect"] = "experimental; GET por nome",
             ["collect"] = "experimental; ACTIVE", ["cancel"] = "unsupported", ["reconcile"] = "experimental; GET por nome conhecido",
-            ["uploadFile"] = "unsupported", ["idempotency"] = "unsupported"
+            ["uploadFile"] = "experimental; media upload", ["idempotency"] = "unsupported"
         });
 
     public Task<NotebookResource> Get(string name, string project, string bearer, CancellationToken token) =>
@@ -35,6 +35,24 @@ public sealed partial class Notebook(HttpClient client)
             throw new DomainError("Caderno ou fonte fora do limite do REST v1.");
         return Call(HttpMethod.Post, notebook + "/sources", project, bearer,
             new { display_name = Store.Text(title, 500, "a fonte"), text_content = new { content = Store.Text(text, 1_000_000, "o conteúdo") } }, token);
+    }
+
+    public async Task<NotebookResource> Upload(string notebook, string title, string mime, Stream data, long size,
+        string project, string bearer, CancellationToken token)
+    {
+        if (Resource(notebook).Split('/').Length != 2 || !CloudProject().IsMatch(project) || size is <= 0 or > 209_715_200)
+            throw new DomainError("Notebook, projeto ou tamanho fora da faixa permitida.");
+        var uri = GoogleAuthorization.Query($"https://notebook.googleapis.com/upload/v1/{notebook}/sources:upload", new()
+        { ["uploadType"] = "media", ["source.displayName"] = Store.Text(title, 500, "o nome da fonte") });
+        using var request = GoogleAuthorization.Authorized(HttpMethod.Post, uri, bearer);
+        request.Headers.Add("x-goog-user-project", project);
+        request.Content = new StreamContent(data);
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue(mime);
+        request.Content.Headers.ContentLength = size;
+        using var response = await client.SendAsync(request, token);
+        using var result = await GoogleAuthorization.Read(response, "upload do Notebook", token);
+        var root = result.RootElement.GetProperty("source");
+        return new NotebookResource(Resource(root.GetProperty("name").GetString()!), root.GetProperty("state").GetString());
     }
 
     public async Task<NotebookResource> WaitForSource(string source, string project, string bearer, int maxChecks, CancellationToken token,

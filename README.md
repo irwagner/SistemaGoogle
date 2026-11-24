@@ -1,12 +1,12 @@
 # Central de Produção com IA
 
-Central local em português para Windows x64. A aplicação organiza projetos, tarefas e decisões no SQLite, guarda arquivos por SHA-256 e permite montar um episódio com mídia importada. O diagnóstico apresenta o estado das integrações externas.
+Central local em português para Windows x64. Na tela inicial escolha Programação, Vídeo e minisséries, Pesquisa, Áudio, Distribuição ou Contas e recursos. Cada trabalho guarda pedido, conversa e evidências no projeto. **Continuar de onde parei** reabre os trabalhos recentes.
 
 ## Abrir no Windows
 
 1. Extraia o ZIP da Central para uma pasta local. Compare seu SHA-256 com o arquivo .sha256 da entrega.
 2. Abra Abrir-Central.cmd e mantenha a janela do launcher aberta enquanto usar a Central. O navegador padrão recebe uma sessão local. Para instalar no perfil Windows, execute `powershell -NoProfile -File .\Instalar.ps1` na pasta extraída.
-3. Crie um projeto e importe um briefing em **Arquivos**. Em **Tarefas**, registre a próxima ação antes de fechar. Reabra pelo launcher e consulte o histórico.
+3. Em **Programação → Criar sistema**, informe o pedido e revise o plano. Para execução local, selecione um modelo instalado no Ollama. Em **Vídeo e minisséries**, aprove roteiro e planos para abrir a montagem. [Guia da versão 0.2.0](docs/VERSAO_0.2.0.md)
 
 O programa instalado ocupa `%LOCALAPPDATA%\CentralProducao\programa`. Os projetos ficam em `%LOCALAPPDATA%\CentralProducao\dados`. A variável `CENTRAL_DATA` permite apontar para outro diretório NTFS. Para o Estúdio, instale FFmpeg com libx264 e AAC e ffprobe no PATH ou configure `CENTRAL_FFMPEG` e `CENTRAL_FFPROBE` com caminhos absolutos.
 

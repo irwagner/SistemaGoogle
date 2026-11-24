@@ -1,7 +1,7 @@
 param(
     [string]$Dotnet = 'dotnet',
     [string]$Destino = (Join-Path $PSScriptRoot '../entrega'),
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Versao = '0.1.0',
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Versao = '0.2.0',
     [switch]$SomenteCentral,
     [switch]$AtualizarLocks
 )
@@ -39,13 +39,15 @@ try {
             [ordered]@{ path = $_.FullName.Substring($app.Length + 1).Replace('\', '/')
                 sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
         }
-        [ordered]@{ version = $releaseVersion; target = 'win-x64'; files = @($hashes) } |
+        $schema = if ($target.Name -eq 'Central') { @(Get-ChildItem src/Central/Migrations -Filter '*.sql').Count } else { $null }
+        [ordered]@{ version = $releaseVersion; target = 'win-x64'; schema = $schema; files = @($hashes) } |
             ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $package 'release.json') -Encoding utf8
         if ($target.Name -eq 'Central') {
             Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Instalar.ps1'),(Join-Path $PSScriptRoot 'Abrir-Central.cmd') -Destination $package
             Copy-Item -LiteralPath (Join-Path $base 'README.md') -Destination $package
             $guides = New-Item -ItemType Directory -Path (Join-Path $package 'docs')
             Copy-Item -LiteralPath (Join-Path $base 'docs/OPERACAO.md'),(Join-Path $base 'docs/MARCOS.md'),(Join-Path $base 'docs/EVIDENCIAS.md') -Destination $guides.FullName
+            Copy-Item -LiteralPath (Join-Path $base 'docs/VERSAO_0.2.0.md') -Destination $guides.FullName
         } else {
             Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Abrir-Orcamentos.cmd') -Destination $package
         }

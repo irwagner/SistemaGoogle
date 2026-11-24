@@ -3,5 +3,7 @@
 /entrega/
 /.verificacao/
 /.playwright-cli/
+__pycache__/
 *.user
 *.sqlite*
+**/.nuget/

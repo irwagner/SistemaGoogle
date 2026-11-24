@@ -1,0 +1,52 @@
+@model TrabalhoModel
+@if (Model.Item.Area == "pesquisa") { <partial name="_Investigacao" model="Model" /> return; }
+@if (Model.Item.Area == "audio") { <partial name="_AudioDesk" model="Model" /> return; }
+@if (Model.Item.Area == "distribuicao") { <partial name="_Distribuicao" model="Model" /> return; }
+@{
+    var area = Model.Item.Area;
+    var sec = area switch { "audio" => "estudio", "pesquisa" => "pesquisa", _ => "arquivos" };
+    var story = area == "video" ? Model.Story : null;
+    var scope = area == "video" ? Model.Episode : null;
+}
+<section class="panel">
+    <h2>@Workbench.Areas[area]</h2>
+    @if (area == "video" && scope == null)
+    {
+        <form method="post" asp-page-handler="Roteiro">
+            <label>Roteiro<textarea name="script" rows="6" maxlength="16000" required>@story?.Script</textarea></label>
+            <label>Personagens, continuidade e direitos<textarea name="characters" rows="4" maxlength="12000" required>@story?.Characters</textarea></label>
+            <h3>Storyboard</h3>
+            <p class="muted">Três planos iniciais de oito segundos, ajustáveis na montagem.</p>
+            @for (var i = 0; i < 3; i++)
+            {
+                <label>Plano @(i + 1)<textarea name="@("shot" + (i + 1))" rows="3" required>@(story?.Shots.ElementAtOrDefault(i))</textarea></label>
+            }
+            <div class="row"><button class="secondary" name="approved" value="false">Salvar roteiro</button>
+                <button name="approved" value="true">Aprovar roteiro e três planos</button></div>
+        </form>
+    }
+    else if (scope != null)
+    {
+        <p>Roteiro, personagens e storyboard aprovados.</p>
+        <div class="row">
+            <a class="button" asp-page="/Projeto" asp-route-id="@scope.Scope" asp-route-sec="estudio">Abrir montagem e comparar takes</a>
+            <a asp-page="/Projeto" asp-route-id="@scope.Scope" asp-route-sec="arquivos">Importar mídias do episódio</a>
+        </div>
+        @if (Model.ProjectFiles.Count > 0)
+        {
+            <form method="post" asp-page-handler="VinculoVideo">
+                <label>Arquivo do projeto para o episódio<select name="asset">@foreach (var asset in Model.ProjectFiles) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+                <button class="secondary">Vincular ao episódio</button>
+            </form>
+        }
+        @if (Model.Masters.Count > 0)
+        {
+            <form method="post" asp-page-handler="VinculoVideo">
+                <input type="hidden" name="toParent" value="true">
+                <label>Master aprovado para compartilhar<select name="asset">@foreach (var asset in Model.Masters) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+                <button class="secondary">Disponibilizar master no projeto</button>
+            </form>
+        }
+    }
+    else { <a asp-page="/Projeto" asp-route-id="@Model.Project.Id" asp-route-sec="@sec">Abrir ferramentas do projeto</a> }
+</section>

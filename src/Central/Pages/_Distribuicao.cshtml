@@ -1,0 +1,57 @@
+@model TrabalhoModel
+@{
+    var files = Model.ProjectFiles;
+    var profiles = Model.Profiles("youtube");
+}
+<section class="panel">
+    <h2>Pacotes e publicações</h2>
+    @foreach (var delivery in Model.Deliveries) {
+        <article class="shot-card" data-delivery="@delivery.Id">
+            <h3>@delivery.Title</h3><p>@delivery.Channel · @delivery.Visibility · @delivery.State</p>
+            @if (delivery.State == "rascunho") {
+                <form method="post" asp-page-handler="AprovarEntrega"><input type="hidden" name="delivery" value="@delivery.Id"><button>Aprovar pacote</button></form>
+            } else {
+                <a asp-page-handler="PacoteCanal" asp-route-delivery="@delivery.Id">Baixar pacote de canal</a>
+            }
+            @if (delivery.Remote != null) {
+                <p>Vídeo @delivery.Remote · Visualizações nos últimos 30 dias: @(delivery.Views?.ToString() ?? "Ainda indisponíveis")</p>
+                <form method="post" asp-page-handler="Metricas"><input name="delivery" type="hidden" value="@delivery.Id"><button class="secondary">Consultar métricas</button></form>
+            } else if (delivery.Visibility == "private" && delivery.State != "rascunho") {
+                @if (profiles.Count == 0) { <p><a asp-page="/Google">Autorize o perfil do canal</a> para enviar em privado.</p> }
+                else if (delivery.State != "conciliar_sem_sessao") {
+                    <form method="post" asp-page-handler="Youtube">
+                        <input type="hidden" name="delivery" value="@delivery.Id">
+                        @if (delivery.State == "aprovada_local") {
+                            <label>Perfil autorizado<select name="profile">@foreach (var profile in profiles) {
+                                <option value="@profile.Id">@profile.Label · @profile.Expected</option>
+                            }</select></label>
+                            <label>Categoria YouTube (ID)<input type="number" name="category" min="1" max="999" required></label>
+                            <label>Destinado a crianças<select name="audience" required><option value="">Escolha</option><option value="sim">Sim</option><option value="nao">Não</option></select></label>
+                            <label class="row"><input class="check" type="checkbox" name="authorized" value="true" required>
+                                Autorizo usar a cota e enviar este master em privado para @delivery.Channel.
+                            </label>
+                        }
+                        <button>@(delivery.State == "aprovada_local" ? "Enviar em privado" : "Consultar e retomar sessão original")</button>
+                    </form>
+                } else { <p>Confira o vídeo no canal original. A sessão de envio não foi confirmada.</p> }
+            }
+        </article>
+    }
+    <details open="@(Model.Deliveries.Count == 0)"><summary>Preparar pacote por destino</summary>
+    @if (!files.Any(asset => asset.Type == ".mp4")) { <p>Importe um master MP4 ou disponibilize um master aprovado no projeto.</p> }
+    else {
+        <form method="post" asp-page-handler="Entrega">
+            <label>Master<select name="media">@foreach (var asset in files.Where(a => a.Type == ".mp4")) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+            <label>Capa<select name="cover"><option value="">Sem capa</option>@foreach (var asset in files.Where(a => a.Type is ".png" or ".jpg" or ".webp")) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+            <label>Legenda<select name="caption"><option value="">Sem legenda</option>@foreach (var asset in files.Where(a => a.Type == ".srt")) { <option value="@asset.Id">@asset.Name</option> }</select></label>
+            <label>Título<input name="title" maxlength="100" required></label>
+            <label>Descrição e créditos<textarea name="description" maxlength="4900" required></textarea></label>
+            <label>Destino ou ID do canal<input name="channel" placeholder="Use o ID UC… para YouTube" required></label>
+            <label>Visibilidade<select name="visibility"><option value="local">Local</option><option value="private">Privada</option>
+                <option value="unlisted">Não listada (pacote local)</option><option value="public">Pública (pacote local)</option></select></label>
+            <label class="row"><input class="check" name="approved" value="true" type="checkbox"> Aprovo esta entrega local</label>
+            <button>Guardar pacote</button>
+        </form>
+    }
+    </details>
+</section>
