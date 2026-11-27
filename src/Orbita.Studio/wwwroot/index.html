@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="orbita-token" content="__ORBITA_TOKEN__">
+  <title>Orbita Studio</title>
+  <link rel="stylesheet" href="/orbita.css">
+  <script src="/chat-renderer.js" defer></script>
+  <script src="/orbita.js" defer></script>
+</head>
+<body data-layout="simples" data-view="plan">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Orbita Studio, início"><i class="orbital" aria-hidden="true"></i><span>Orbita Studio</span><small id="app-version"></small></a>
+    <div class="top-controls">
+      <button type="button" class="pool-pill" id="open-pool"><i class="dot"></i><span id="pool-summary">Pool em espera</span></button>
+      <div class="quota" id="gemini-quota" title="Cota compartilhada da família Gemini">
+        <div><i class="gemini-dot"></i><span>Gemini Neon</span></div>
+        <div class="quota-meters"><label>5h <progress max="100" aria-label="Cota Gemini de 5 horas"></progress><b>—</b></label><label>7d <progress max="100" aria-label="Cota Gemini semanal"></progress><b>—</b></label></div>
+      </div>
+      <div class="quota opus" id="opus-quota" title="Cota compartilhada da família Claude/GPT">
+        <div><i></i><span>Claude Opus</span></div>
+        <div class="quota-meters"><label>5h <progress max="100" aria-label="Cota Claude de 5 horas"></progress><b>—</b></label><label>7d <progress max="100" aria-label="Cota Claude semanal"></progress><b>—</b></label></div>
+      </div>
+      <div class="account-chip"><i class="dot" aria-hidden="true"></i><span id="active-account" role="status">Sem execução ativa</span></div>
+    </div>
+    <div class="layout-switch" role="group" aria-label="Layout do workspace" title="Alternar layout (Ctrl+J)">
+      <button type="button" data-layout-choice="simples" aria-pressed="true">Simples</button>
+      <button type="button" data-layout-choice="avancado" aria-pressed="false">Avançado</button>
+    </div>
+    <button type="button" class="btn resume" id="open-history"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 1 2.6 6.4M3 12V5m0 7h7m2-4v5l3 2"/></svg>Continuar de onde parei</button>
+  </header>
+
+  <div class="shell">
+    <nav class="rail" aria-label="Módulos">
+      <button class="rail-item current" type="button" data-module="programacao" aria-current="page"><svg viewBox="0 0 24 24"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-2-15-4 18"/></svg>Programação</button>
+      <button class="rail-item" type="button" data-module="video"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3Z"/></svg>Vídeo</button>
+      <button class="rail-item" type="button" data-module="pesquisa"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>Pesquisa</button>
+      <button class="rail-item" type="button" data-module="audio"><svg viewBox="0 0 24 24"><path d="M4 9v6m4-9v12m4-15v18m4-15v12m4-9v6"/></svg>Áudio</button>
+      <button class="rail-item" type="button" data-module="contas"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M2 20c0-3 3-5 7-5s7 2 7 5m0-15a3 3 0 0 1 0 6m2 4c2 .5 4 2 4 5"/></svg>Contas</button>
+      <button class="rail-item preferences" type="button" data-module="config"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/></svg>Ajustes</button>
+    </nav>
+
+    <aside class="explorer" aria-label="Explorador do projeto">
+      <div class="explorer-head"><label for="project-select">Projetos</label><button type="button" class="icon-btn" id="new-project" title="Novo projeto ou pasta" aria-label="Novo projeto ou pasta">＋</button></div>
+      <select id="project-select" aria-label="Projeto"><option value="">Selecione um projeto</option></select>
+      <section class="explorer-section">
+        <div class="section-title"><h2><span id="mission-list-title">Conversas</span><span class="worktree-caption"> (worktrees)</span></h2><button type="button" class="icon-btn" id="new-mission" title="Nova missão" aria-label="Nova missão">＋</button></div>
+        <div id="missions" class="mission-list"><p class="muted small">Nenhuma missão neste projeto.</p></div>
+      </section>
+      <section class="explorer-section context-list">
+        <div class="section-title"><h2>Projeto</h2></div>
+        <button type="button" data-context="SPEC.md"><span>≡</span>SPEC.md</button>
+        <button type="button" data-context="TASKS.md"><span>☷</span>TASKS.md</button>
+        <button type="button" data-context="MEMORY.md"><span>▤</span>MEMORY.md</button>
+        <button type="button" data-context="SKILL.md"><span>✧</span>SKILL.md</button>
+      </section>
+      <div class="explorer-foot"><i class="dot"></i><span>Dados locais</span><b>Windows ×64</b></div>
+    </aside>
+
+    <main class="workbench">
+      <div class="workbench-tabs" role="tablist" aria-label="Visões da missão">
+        <button type="button" class="tab selected" role="tab" id="tab-plan" aria-selected="true" aria-controls="view-plan" data-tab="plan"><span class="tab-icon" aria-hidden="true">☷</span><span class="tab-label">Conversa</span></button>
+        <button type="button" class="tab" role="tab" id="tab-diff" aria-selected="false" aria-controls="view-diff" data-tab="diff"><span class="tab-icon" aria-hidden="true">↯</span><span class="tab-label">Alterações</span></button>
+        <button type="button" class="tab" role="tab" id="tab-live" aria-selected="false" aria-controls="view-live" data-tab="live"><span class="tab-icon" aria-hidden="true">◉</span><span class="tab-label">Atividade</span></button>
+      </div>
+      <div class="workbench-heading">
+        <div class="mission-heading"><div><div class="path" id="mission-path">Programação / Workspace</div><h1 id="mission-title">Crie sua primeira missão</h1></div><div class="mission-controls"><button type="button" class="btn" id="open-project-app" hidden>Abrir aplicativo</button><span class="tag" id="mission-state">Workspace</span></div></div>
+      </div>
+      <div class="workbench-view">
+        <div class="workbench-body">
+          <section id="view-plan" class="pane" role="tabpanel" aria-labelledby="tab-plan">
+            <div class="empty" id="empty-plan"><div class="empty-icon">⌘</div><h2>O seu projeto começa aqui</h2><p>Crie um projeto ou conecte uma pasta Git para conversar com o Antigravity e acompanhar o trabalho.</p><button type="button" class="btn primary" id="begin-project">Criar projeto</button></div>
+            <div class="session" id="session" hidden>
+              <details class="plan-card" id="mission-plan"><summary>Plano da missão</summary><div id="plan-list" class="muted">O plano aparece conforme o Antigravity organiza o trabalho.</div></details>
+              <div class="conversation" id="conversation" aria-label="Conversa da missão"></div>
+            </div>
+          </section>
+          <section id="view-diff" class="pane diff-pane" role="tabpanel" aria-labelledby="tab-diff" hidden>
+            <div class="diff-header"><h2>Alterações no worktree</h2><button class="btn" id="refresh-diff" type="button">Atualizar</button></div>
+            <div id="diff-status" class="muted small"></div><div id="diff-code" class="diff-code"></div>
+            <section class="evidence"><h3>Evidências da missão</h3><div id="evidence-list" class="muted small">Aguardando eventos do Antigravity.</div></section>
+          </section>
+          <section id="view-live" class="pane" role="tabpanel" aria-labelledby="tab-live" hidden>
+            <div class="live-intro"><span class="tag">Eventos ao vivo</span><h2>Atividade da missão</h2><p class="muted">Acompanhe ferramentas, checkpoints e mudanças de estado conforme chegam.</p></div>
+            <div id="live-log" class="live-log"></div>
+          </section>
+        </div>
+        <button type="button" class="btn chat-jump" id="chat-jump" hidden>↓ Ir para a última mensagem</button>
+      </div>
+      <form class="composer" id="composer">
+        <p id="intervention" class="intervention" role="status" hidden></p>
+        <div id="attachment-draft" class="attachment-list" aria-label="Anexos da mensagem" hidden></div>
+        <label class="sr-only" for="prompt">Mensagem para o Antigravity</label>
+        <textarea id="prompt" rows="2" placeholder="Escreva o pedido ou diga ‘pode fazer’…" required maxlength="32000"></textarea>
+        <div class="composer-actions">
+          <button type="button" class="btn plain attach-button" id="attach-files" aria-label="Anexar arquivos" title="Anexar arquivos · até 6, com 5 MB por arquivo e 10 MB no total"><span aria-hidden="true">📎</span> Anexar</button>
+          <input id="file-picker" type="file" multiple hidden accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.xlsx,.txt,.md,.csv,.tsv,.json,.jsonl,.xml,.yaml,.yml,.log,.sql,.cs,.py,.js,.mjs,.ts,.tsx,.jsx,.css,.html,.rs,.go,.toml,.ini,.java">
+          <label class="model-choice"><span>Modelo</span><select id="model"><option value="">Do Antigravity</option><option value="neon">Gemini Neon</option><option value="opus">Claude Opus</option></select></label>
+          <div class="permission-choices" role="group" aria-label="Modo de execução">
+            <button type="button" class="permission-option" data-full="false" aria-pressed="true" title="Segue na missão sem pedir aprovações de rotina">Autônomo</button>
+            <button type="button" class="permission-option" data-full="true" aria-pressed="false" title="Executa sem aprovações de rotina e pode abrir o aplicativo da missão no seu Windows quando você pedir">Permissão total</button>
+          </div>
+          <button type="button" class="btn plain" data-cancel-run hidden>Interromper</button>
+          <button class="btn plain" type="submit" value="talk">Enviar</button><button class="btn primary" type="submit" value="execute">Executar</button>
+        </div>
+      </form>
+      <footer class="actionbar"><div><i class="dot"></i><span id="worktree-label">Selecione uma missão</span></div><div class="action-buttons"><button type="button" class="btn action-accept" id="accept">Aceitar Diff</button><button type="button" class="btn danger" id="revert">Reverter</button></div></footer>
+    </main>
+
+    <aside class="console" aria-label="Console Antigravity">
+      <div class="console-head"><div><h2><span class="terminal-icon">›_</span>Antigravity CLI</h2><p>Cérebro único <span>·</span> <b id="session-status">Aguardando missão</b></p></div><button type="button" class="icon-btn" data-cancel-run aria-label="Interromper execução" title="Interromper execução" hidden>■</button></div>
+      <div class="tools" aria-label="Ferramentas subordinadas">
+        <button type="button" class="tool hermes" data-tool="hermes"><span>✺</span><b>Hermes MCP · Computer Use</b></button>
+        <button type="button" class="tool browser" data-tool="browser"><span>◎</span><b>Browser Worker</b></button>
+        <button type="button" class="tool media" data-tool="media"><span>▶</span><b>FFmpeg Studio</b></button>
+        <button type="button" class="tool git" data-tool="git"><span>⑂</span><b>Git Snapshot</b></button>
+      </div>
+      <div class="console-log" id="console-log" aria-label="Saída de execução"><div class="log-empty">Os eventos do Antigravity aparecem aqui quando a missão iniciar.</div></div>
+      <div class="console-bottom"><button type="button" id="skill" class="skill-button"><kbd>Ctrl K</kbd><span>Usar SKILL.md</span><b>↗</b></button></div>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+  <dialog id="modal" aria-labelledby="modal-title"><div class="modal-head"><h2 id="modal-title"></h2><button type="button" class="icon-btn" id="close-modal" aria-label="Fechar">×</button></div><div id="modal-content"></div></dialog>
+</body>
+</html>

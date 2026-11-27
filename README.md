@@ -1,4 +1,10 @@
-# Central de Produção com IA
+# Orbita Studio
+
+**Orbita Studio 0.3.17** reúne a programação com Antigravity CLI e os percursos de Vídeo, Pesquisa e Áudio no cliente Windows. O desktop integra Signal e Discord, pode iniciar com o Windows e continua na bandeja ao fechar a janela. Após preparar o cliente, abra `Abrir-OrbitaStudioNativo.cmd` na raiz do repositório. [Guia do cliente nativo](docs/ORBITA_CLIENTE_HERMES.md)
+
+Para as versões anteriores, veja [criação de missões](docs/ORBITA_STUDIO_0.3.9.md), [anexos no chat](docs/ORBITA_STUDIO_0.3.8.md) e [abertura de aplicativos da missão](docs/ORBITA_STUDIO_0.3.7.md).
+
+## Central de Produção e pacotes anteriores
 
 Central local em português para Windows x64. Na tela inicial escolha Programação, Vídeo e minisséries, Pesquisa, Áudio, Distribuição ou Contas e recursos. Cada trabalho guarda pedido, conversa e evidências no projeto. **Continuar de onde parei** reabre os trabalhos recentes.
 

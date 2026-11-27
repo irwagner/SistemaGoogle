@@ -64,6 +64,7 @@ if (args.FirstOrDefault() == "diagnostico")
 }
 
 var openBrowser = args.Contains("--abrir");
+var orbitaProduction = Environment.GetEnvironmentVariable("CENTRAL_ORBITA_PRODUCTION") == "1";
 var testTokenFile = Environment.GetEnvironmentVariable("CENTRAL_BOOTSTRAP_FILE");
 var bootstrap = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
 var session = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
@@ -97,7 +98,7 @@ builder.Services.AddSingleton<GoogleAuthorization>();
 builder.Services.AddSingleton<NotebookJobs>();
 builder.Services.AddSingleton<YoutubeDesk>();
 builder.Services.AddHostedService<NotebookWorker>();
-builder.Services.AddHostedService<ProgrammingWorker>();
+if (!orbitaProduction) builder.Services.AddHostedService<ProgrammingWorker>();
 var app = builder.Build();
 app.Services.GetRequiredService<Workbench>().Recover();
 app.Services.GetRequiredService<NotebookJobs>().Recover();

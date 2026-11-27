@@ -1,0 +1,82 @@
+.orbita-shell {
+  --orbita-surface: #151a28;
+  --orbita-panel: #1a2132;
+  --orbita-line: #30394c;
+  --orbita-text: #ecf0fa;
+  --orbita-muted: #a4afc5;
+  --orbita-accent: #b4a6ff;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  height: 100dvh;
+  overflow: hidden;
+  background: #101522;
+  color: var(--orbita-text);
+  color-scheme: dark;
+}
+.orbita-shell button, .orbita-shell select, .orbita-shell input, .orbita-shell textarea { font: inherit; }
+.orbita-shell button:focus-visible, .orbita-shell select:focus-visible, .orbita-shell input:focus-visible, .orbita-shell textarea:focus-visible { outline: 2px solid var(--orbita-accent); outline-offset: 2px; }
+.orbita-shell button:disabled { cursor: default; opacity: .45; }
+.orbita-sidebar { display: grid; grid-template-rows: auto auto auto 1fr auto; gap: 12px; padding: 18px 14px; min-height: 0; border-right: 1px solid var(--orbita-line); background: var(--orbita-surface); }
+.orbita-brand { display: flex; align-items: center; gap: 9px; padding: 3px 6px 10px; font-size: 17px; font-weight: 660; }
+.orbita-brand span { color: var(--orbita-accent); }
+.orbita-projects { display: flex; align-items: center; gap: 5px; }
+.orbita-projects select { min-width: 0; flex: 1; }
+.orbita-projects button, .orbita-icon, .orbita-preview form button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 7px; border-radius: 7px; }
+.orbita-shell select, .orbita-modal input { border: 1px solid var(--orbita-line); padding: 6px 9px; border-radius: 7px; background: var(--orbita-panel); }
+.orbita-shell button:not(:disabled):hover { background: #2a3247; }
+.orbita-new { display: flex; align-items: center; gap: 8px; border: 1px solid var(--orbita-line); border-radius: 8px; padding: 8px 9px; text-align: left; }
+.orbita-sidebar nav { overflow: auto; }
+.orbita-sidebar nav button { display: grid; gap: 3px; width: 100%; padding: 8px 9px; border-radius: 8px; text-align: left; }
+.orbita-sidebar nav button[aria-current='true'] { background: #292747; }
+.orbita-sidebar nav strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.orbita-sidebar nav small, .orbita-version, .orbita-heading span { color: var(--orbita-muted); font-size: 12px; }
+.orbita-version { padding-left: 6px; }
+.orbita-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.orbita-titlebar, .orbita-tabs { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--orbita-line); padding: 10px 16px; }
+.orbita-heading { flex: 1; min-width: 0; }
+.orbita-heading h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 610; }
+.orbita-titlebar button[aria-pressed='true'], .orbita-tabs button[aria-pressed='true'] { color: var(--orbita-accent); }
+.orbita-tabs button, .orbita-inspector button { padding: 5px 9px; border-radius: 6px; }
+.orbita-workspace { display: flex; flex: 1; min-height: 0; }
+.orbita-chat { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.orbita-transcript {
+  position: relative; isolation: isolate; flex: 1; min-height: 0; display: flex; flex-direction: column;
+  --composer-width: 848px;
+  --dt-background: #101522;
+  --dt-foreground: var(--orbita-text);
+  --dt-muted-foreground: var(--orbita-muted);
+  --dt-user-bubble: #282d48;
+  --dt-user-bubble-border: #3e4562;
+}
+.orbita-empty { margin: auto; min-width: 0; padding: 24px; text-align: center; }
+.orbita-empty h2 { font-size: clamp(23px, 3vw, 32px); letter-spacing: -.025em; }
+.orbita-empty p { color: var(--orbita-muted); margin: 8px 0 16px; }
+.orbita-composer { width: min(800px, calc(100% - 32px)); margin: 8px auto 17px; border: 1px solid var(--orbita-line); border-radius: 13px; background: var(--orbita-surface); padding: 9px; }
+.orbita-composer textarea { min-height: 58px; max-height: 180px; resize: vertical; display: block; width: 100%; padding: 9px; border-radius: 8px; background: transparent; }
+.orbita-composer-actions, .orbita-attachments { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.orbita-composer-actions button, .orbita-attachments button { display: inline-flex; align-items: center; gap: 5px; border-radius: 7px; padding: 6px 8px; }
+.orbita-attachments button { border: 1px solid var(--orbita-line); font-size: 12px; }
+.orbita-composer-actions select { max-width: 140px; }
+.orbita-spacer { flex: 1; }
+.orbita-shell .orbita-primary { background: var(--orbita-accent); color: #181332; border-radius: 8px; padding: 7px 11px; font-weight: 650; }
+.orbita-shell .orbita-primary:not(:disabled):hover { background: #c8beff; }
+.orbita-notice { display: flex; justify-content: space-between; gap: 10px; padding: 8px 16px; background: #322739; color: #fbd8f4; }
+.orbita-inspector { overflow: auto; padding: 20px; }
+.orbita-inspector h2 { font-weight: 650; font-size: 18px; margin-bottom: 10px; }
+.orbita-inspector p, .orbita-inspector label { display: block; padding: 4px 0; }
+.orbita-inspector pre { background: var(--orbita-surface); padding: 12px; overflow: auto; }
+.orbita-preview { display: flex; flex-direction: column; width: 42%; min-width: 268px; border-left: 1px solid var(--orbita-line); background: var(--orbita-surface); }
+.orbita-preview form { padding: 7px; display: flex; gap: 4px; }
+.orbita-preview input { flex: 1; min-width: 0; padding: 4px 6px; border: 1px solid var(--orbita-line); border-radius: 5px; background: var(--orbita-panel); }
+.orbita-preview-view { flex: 1; min-height: 0; }
+.orbita-preview-view p { padding: 18px; color: var(--orbita-muted); }
+.orbita-modal-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: #070913a0; }
+.orbita-modal { width: min(460px, calc(100% - 40px)); display: grid; gap: 13px; border: 1px solid var(--orbita-line); border-radius: 13px; padding: 20px; background: var(--orbita-panel); }
+.orbita-modal h2 { font-size: 19px; font-weight: 650; }
+.orbita-modal label { display: grid; gap: 5px; }
+.orbita-modal > div { display: flex; justify-content: flex-end; gap: 7px; }
+.orbita-modal > div button { padding: 7px 11px; border-radius: 8px; }
+@media (max-width: 1000px) {
+  .orbita-shell { grid-template-columns: 190px minmax(0, 1fr); }
+  .orbita-preview { width: 48%; min-width: 230px; }
+}

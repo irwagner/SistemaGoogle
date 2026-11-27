@@ -10,6 +10,7 @@ public sealed class TrabalhoModel(Store store, Workbench workbench, LocalModel l
     Coordinator coordinator, AudioDesk audio, Distribution distribution, GoogleAuthorization google, NotebookJobs notebook,
     YoutubeDesk youtube, Research research) : PageModel
 {
+    public bool OrbitaProduction => Environment.GetEnvironmentVariable("CENTRAL_ORBITA_PRODUCTION") == "1";
     public WorkItem Item { get; private set; } = null!;
     public Project Project { get; private set; } = null!;
     public string? Error { get; private set; }
@@ -80,9 +81,9 @@ public sealed class TrabalhoModel(Store store, Workbench workbench, LocalModel l
         Change(id, () => workbench.SaveRequest(id, revision, body));
     public Task<IActionResult> OnPostMensagem(string id, string body) => Change(id, () => workbench.Comment(id, body));
     public Task<IActionResult> OnPostPlanejar(string id, int revision, string? model, string action) =>
-        Change(id, () => { if (action == "modelo") workbench.PlanWithModel(id, revision, model); else workbench.Template(id, revision); });
+        Change(id, () => { if (!OrbitaProduction && action == "modelo") workbench.PlanWithModel(id, revision, model); else workbench.Template(id, revision); });
     public Task<IActionResult> OnPostPlano(string id, int revision, string plan, string executor, string? model, string action) =>
-        Change(id, () => { if (action == "confirmar") workbench.Approve(id, revision, plan, executor, model); else workbench.SavePlan(id, revision, plan); });
+        Change(id, () => { if (action == "confirmar") workbench.Approve(id, revision, plan, OrbitaProduction ? "assistido" : executor, model); else workbench.SavePlan(id, revision, plan); });
     public Task<IActionResult> OnPostAcao(string id, int revision, string action) =>
         Change(id, () => workbench.SetState(id, revision, action));
     public Task<IActionResult> OnPostVincular(string id, string asset, string role) =>
@@ -202,7 +203,7 @@ public sealed class TrabalhoModel(Store store, Workbench workbench, LocalModel l
     {
         Item = workbench.Get(id);
         Project = store.GetProject(Item.Project);
-        if (Editable && Item.Area is "programacao" or "video")
+        if (!OrbitaProduction && Editable && Item.Area is ("programacao" or "video"))
             Models = await local.Models(HttpContext.RequestAborted);
     }
 

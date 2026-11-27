@@ -40,7 +40,7 @@
                 }
                 else
                 {
-                    <p class="muted">Ollama local indisponível. Você pode preencher o plano e seguir com o percurso assistido.</p>
+                    <p class="muted">@(Model.OrbitaProduction ? "Preencha o plano para seguir com o percurso assistido." : "Ollama local indisponível. Você pode preencher o plano e seguir com o percurso assistido.")</p>
                     <button class="secondary" name="action" value="modelo-editavel">Usar plano editável</button>
                 }
             </form>

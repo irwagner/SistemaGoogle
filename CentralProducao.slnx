@@ -2,4 +2,10 @@
   <Project Path="src/Central/Central.csproj" />
   <Project Path="pilotos/Orcamentos/Orcamentos.csproj" />
   <Project Path="tests/Central.Tests/Central.Tests.csproj" />
+  <Project Path="src/Orbita.Core/Orbita.Core.csproj" />
+  <Project Path="src/Orbita.Engine/Orbita.Engine.csproj" />
+  <Project Path="src/Orbita.Pool/Orbita.Pool.csproj" />
+  <Project Path="src/Orbita.Studio/Orbita.Studio.csproj" />
+  <Project Path="src/Orbita.Desktop/Orbita.Desktop.csproj" />
+  <Project Path="tests/Orbita.Tests/Orbita.Tests.csproj" />
 </Solution>

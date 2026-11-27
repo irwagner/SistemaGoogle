@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "orbita.core": {
+        "type": "Project"
+      },
+      "orbita.engine": {
+        "type": "Project",
+        "dependencies": {
+          "Orbita.Core": "[1.0.0, )"
+        }
+      },
+      "orbita.pool": {
+        "type": "Project",
+        "dependencies": {
+          "Orbita.Core": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}

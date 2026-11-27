@@ -3,6 +3,10 @@
 /entrega/
 /.verificacao/
 /.playwright-cli/
+/.orbita-hermes/
+.env
+.env.*
+!.env.example
 __pycache__/
 *.user
 *.sqlite*

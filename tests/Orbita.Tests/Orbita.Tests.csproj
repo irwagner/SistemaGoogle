@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Orbita.Core/Orbita.Core.csproj" />
+    <ProjectReference Include="../../src/Orbita.Engine/Orbita.Engine.csproj" />
+    <ProjectReference Include="../../src/Orbita.Pool/Orbita.Pool.csproj" />
+  </ItemGroup>
+</Project>

@@ -42,6 +42,7 @@ const snapshots = new Map();
 const refreshes = new Map();
 const quotaCache = new Map();
 const quotaChecks = new Map();
+const verifications = new Map();
 const removingAccounts = new Set();
 const accountUse = new Map();
 const idleWaiters = new Map();
@@ -233,7 +234,24 @@ function isQuotaError(status, message) {
 function quotaShape(payload) {
   return { rootKeys: Object.keys(payload || {}), buckets: quotaBuckets(payload) };
 }
+function recordVerification(account, statusCode, raw) {
+  if (statusCode !== 403) return;
+  let detail;
+  try {
+    const details = JSON.parse(raw.toString('utf8')).error?.details;
+    detail = Array.isArray(details) && details.find(item => item?.reason === 'VALIDATION_REQUIRED');
+  } catch { return; }
+  if (!detail) return;
+  let url;
+  try {
+    const candidate = new URL(detail.metadata?.validation_url);
+    if (candidate.origin === 'https://accounts.google.com' && !candidate.username && !candidate.password &&
+        /^\/(?:v\d+\/)?signin(?:\/|$)/.test(candidate.pathname)) url = candidate.href;
+  } catch { /* The challenge can arrive without a link. */ }
+  verifications.set(account.id, { url, at: Date.now() });
+}
 async function fetchQuotaSummary(account) {
+  const startedAt = Date.now();
   const request = (quotaRequestTemplate?.accountId === account.id ? quotaRequestTemplate : null) || {
     headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': 'antigravity' },
     body: Buffer.from('{}'),
@@ -246,9 +264,12 @@ async function fetchQuotaSummary(account) {
   }
   const raw = await collect(response, 2_000_000);
   if (response.statusCode < 200 || response.statusCode >= 300) {
+    recordVerification(account, response.statusCode, raw);
     throw new Error(`Quota check returned HTTP ${response.statusCode}.`);
   }
-  return JSON.parse(raw.toString('utf8'));
+  const payload = JSON.parse(raw.toString('utf8'));
+  if ((verifications.get(account.id)?.at ?? Infinity) < startedAt) verifications.delete(account.id);
+  return payload;
 }
 async function checkedQuota(account, force = false) {
   const cached = quotaCache.get(account.id);
@@ -278,9 +299,42 @@ async function refreshAllQuotas() {
   await Promise.all(meta.accounts.filter(account => !removingAccounts.has(account.id))
     .map(account => checkedQuota(account, true)));
 }
+function effectiveAccount(job, group) {
+  if (!job) return null;
+  const current = job.accountIds.map(id => ({ id, work: modelWork.get(id) }))
+    .filter(({ work }) => work?.inFlight && quotaGroup(work.lastModel) === group)
+    .sort((a, b) => b.work.lastStartedAt - a.work.lastStartedAt)[0];
+  return current?.id || job.activeByModel[group] || job.accountIds[0];
+}
+function refreshActiveQuota() {
+  if (!lastRequestedModel) return;
+  const id = effectiveAccount(currentSession(), quotaGroup(lastRequestedModel));
+  const account = meta.accounts.find(row => row.id === id && !removingAccounts.has(row.id));
+  if (account) void checkedQuota(account);
+}
 async function chooseAccount(tried, model, simulateLow, job) {
   const candidates = availableAccounts(tried, quotaGroup(model), job);
   return chooseAccountForModel(candidates, model, job.accountIds.length === 1 ? 0 : meta.lowQuotaPercent, checkedQuota, simulateLow);
+}
+async function testRotation(ids, model) {
+  const accounts = ids.map(id => meta.accounts.find(account => account.id === id && !removingAccounts.has(id)));
+  if (ids.length < 1 || ids.length > 10 || new Set(ids).size !== ids.length || accounts.some(account => !account))
+    throw new Error('Selecione de uma a dez contas salvas para testar.');
+  const checks = await Promise.all(accounts.map(async account => {
+    const quota = await checkedQuota(account, true);
+    const state = verifications.has(account.id) ? 'verification-required' : quota ? 'ready' : 'unavailable';
+    return { id: account.id, label: account.label, state };
+  }));
+  const result = { checks, rotation: 'single', from: null, to: null };
+  if (accounts.length === 1) return result;
+  result.rotation = 'blocked';
+  if (checks.some(check => check.state !== 'ready')) return result;
+  const job = { accountIds: ids, activeByModel: {} };
+  const { account: first } = await chooseAccount(new Set(), model, false, job);
+  if (!first) return result;
+  const { account: second } = await chooseAccount(new Set([first.id]), model, false, job);
+  if (!second) return result;
+  return { ...result, rotation: 'passed', from: first.label, to: second.label };
 }
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
@@ -394,6 +448,12 @@ async function proxy(req, res) {
         if (nextExists) continue;
       }
       relayBuffered(res, 429, response.headers, errorBody);
+      return;
+    }
+    if (response.statusCode === 403) {
+      const errorBody = await collect(response);
+      recordVerification(account, response.statusCode, errorBody);
+      relayBuffered(res, 403, response.headers, errorBody);
       return;
     }
     if (req.url.includes('retrieveUserQuotaSummary') && response.statusCode >= 200 && response.statusCode < 300) {
@@ -519,7 +579,7 @@ function status() {
           other: { fiveHour: displayWindow(pools.other.fiveHour), weekly: displayWindow(pools.other.weekly) },
         },
         quotaCheckedAt: cached?.checkedAt || null,
-        quotaError: cached?.error || null };
+        quotaError: cached?.error || null, verificationRequired: verifications.has(id) };
     }),
     activeId: (group && meta.activeByModel[group]) || meta.activeId, events: meta.events,
     activeGroups: { gemini: meta.activeByModel.gemini || meta.activeId,
@@ -534,7 +594,7 @@ function status() {
     quotaCheckError,
     lastProject: meta.lastProject || null,
     session: job && { projectId: job.projectId, accountIds: job.accountIds, mode: job.mode,
-      account: job.activeByModel[group] || job.accountIds[0] },
+      account: effectiveAccount(job, group) },
   };
 }
 function json(res, statusCode, value) {
@@ -622,8 +682,14 @@ async function api(req, res) {
       json(res, 200, status()); return;
     } finally { removingAccounts.delete(account.id); }
   }
-  if (req.url === '/api/projects/launch') {
+  if (req.url === '/api/projects/release') {
+    if (session?.leaseId && session.leaseId === body.leaseId) session = null;
+    json(res, 200, status()); return;
+  }
+  if (req.url === '/api/projects/launch' || req.url === '/api/projects/reserve') {
     if (currentSession() || enrollment || installing) throw new Error('Feche a sessão ou termine o login atual para abrir um projeto.');
+    const embedded = req.url === '/api/projects/reserve';
+    if (embedded && !/^[a-f0-9]{32}$/.test(body.leaseId || '')) throw new Error('Reserva de sessão inválida.');
     const mode = body.mode;
     const ids = Array.isArray(body.accounts) ? body.accounts : [];
     if ((mode !== 'fixa' && mode !== 'alternar') || ids.length < (mode === 'fixa' ? 1 : 2) ||
@@ -633,7 +699,7 @@ async function api(req, res) {
     }
     if (!/^[a-z0-9]{6,40}$/.test(body.projectId || '')) throw new Error('Selecione um projeto cadastrado.');
     const projectPath = path.resolve(String(body.path || ''));
-    session = { projectId: body.projectId, accountIds: ids, mode, activeByModel: {}, pid: null };
+    session = { projectId: body.projectId, accountIds: ids, mode, activeByModel: {}, pid: null, leaseId: embedded ? body.leaseId : null };
     try {
       const info = await fs.stat(projectPath);
       if (!info.isDirectory()) throw new Error('A pasta do projeto não está disponível.');
@@ -641,13 +707,13 @@ async function api(req, res) {
       lastRequestedModel = null;
       diagnosticNext429Model = null;
       diagnosticNextLowModel = null;
-      session.pid = await launch('Project', projectPath, !!body.resume);
+      if (!embedded) session.pid = await launch('Project', projectPath, !!body.resume);
     } catch (error) { session = null; throw error; }
     try {
       meta.lastProject = { projectId: session.projectId, accountIds: session.accountIds, mode: session.mode };
       await saveMeta();
     } catch { note('A sessão abriu. A Central não conseguiu guardar a seleção do projeto.'); }
-    note('Projeto aberto no Antigravity CLI com as contas selecionadas.');
+    note(embedded ? 'Account Pool reservado para a sessão do Orbita.' : 'Projeto aberto no Antigravity CLI com as contas selecionadas.');
     json(res, 200, status()); return;
   }
   if (req.url === '/api/diagnostics/next429') {
@@ -675,6 +741,21 @@ async function api(req, res) {
   if (req.url === '/api/quota/check') {
     await refreshAllQuotas();
     json(res, 200, status()); return;
+  }
+  if (req.url === '/api/diagnostics/rotation') {
+    const ids = Array.isArray(body.accounts) ? body.accounts : [];
+    const model = body.model === 'opus' ? 'claude-opus-5-5-thinking' : 'gemini-4-neon';
+    json(res, 200, await testRotation(ids, model)); return;
+  }
+  if (req.url === '/api/accounts/verification') {
+    const account = meta.accounts.find(item => item.id === body.id && !removingAccounts.has(item.id));
+    if (!account) throw new Error('Conta Google não encontrada.');
+    const previous = verifications.get(account.id);
+    if (!previous?.url || Date.now() - previous.at > 300_000) await checkedQuota(account, true);
+    const challenge = verifications.get(account.id);
+    if (!challenge?.url || Date.now() - challenge.at > 300_000)
+      throw new Error('O Google não enviou um link de verificação válido. Teste a conta novamente.');
+    json(res, 200, { url: challenge.url }); return;
   }
   if (req.url === '/api/diagnostics/refresh') {
     const account = meta.accounts.find(item => item.id === (body.id || meta.activeId));
@@ -715,6 +796,7 @@ try {
   await bootstrap();
   ready = true;
   setInterval(pollEnrollment, 2500).unref();
+  setInterval(refreshActiveQuota, 5000).unref();
   setInterval(() => { void refreshAllQuotas(); }, 60_000).unref();
   void refreshAllQuotas();
   process.stdout.write(`CENTRALIA_POOL_PORT:${port}\n`);
